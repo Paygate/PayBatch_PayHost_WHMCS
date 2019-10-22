@@ -24,6 +24,15 @@ define( "PAYBATCHAPIWSDL", 'https://secure.paygate.co.za/paybatch/1.2/PayBatch.w
 define( "PAYGATETESTID", '10011072130' );
 define( "PAYGATETESTKEY", 'test' );
 
+/**
+ * @param $pgid
+ * @param $key
+ * @param $reqid
+ * @return array ['token' => $token, 'reference' => $reference, 'transactionId' => $transactionId]
+ * @throws SoapFault
+ *
+ * PayHost Query Request to retrieve card token from authorised vault transaction
+ */
 function getQuery( $pgid, $key, $reqid )
 {
     $userId = $_SESSION['uid'];
@@ -66,7 +75,7 @@ SOAP;
 }
 
 // Get current user
-$userId = intval($_SESSION['uid']);
+$userId = intval( $_SESSION['uid'] );
 
 // Detect module name from filename
 $gatewayModuleName = basename( __FILE__, '.php' );
@@ -87,10 +96,10 @@ if ( $testMode == 'on' ) {
     $payHostSecretKey  = PAYGATETESTKEY;
     $payBatchSecretKey = PAYGATETESTKEY;
 } else {
-    $payHostId         = $gateWayParams['payHostId'];
-    $payBatchId        = $gateWayParams['payBatchId'];
-    $payHostSecretKey  = $gateWayParams['payHostSecretKey'];
-    $payBatchSecretKey = $gateWayParams['payBatchSecretKey'];
+    $payHostId         = $gatewayParams['payHostID'];
+    $payBatchId        = $gatewayParams['payBatchID'];
+    $payHostSecretKey  = $gatewayParams['payHostSecretKey'];
+    $payBatchSecretKey = $gatewayParams['payBatchSecretKey'];
 }
 
 // Retrieve data returned in payment gateway callback
@@ -98,6 +107,7 @@ if ( $testMode == 'on' ) {
 
 if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) ) {
     // PayHost postback
+
     $status   = filter_var( $_POST['TRANSACTION_STATUS'], FILTER_SANITIZE_STRING );
     $verified = false;
     if ( $status == 1 ) {
@@ -144,7 +154,41 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
     } else {
         // Failed
         logTransaction( $gatewayModuleName, null, 'failed' );
+        $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
+        header( 'Location: ' . $url );
     }
 } else {
     // PayBatch response
+    $raw = file_get_contents( 'php://input' );
+    if ( $raw && $raw != '' ) {
+        $a = preg_replace( '/<\/?SOAP-ENV:.*>/', '', $raw );
+        $a = preg_replace( '/(<)(\/?)ns1:/', '${1}${2}', $a );
+        $a = preg_replace( '/\n/', '', $a );
+        $a = preg_replace( '/(>) +(<)/', '${1}${2}', $a );
+
+        $response     = new SimpleXMLElement( $a );
+        $dateUploaded = date_create( $response->Return->DateUploaded->__toString() )->getTimestamp();
+
+        $trFormat = ['TransactionID', 'TransactionType', 'TransactionReference', 'AuthCode', 'StatusCode', 'StatusDescription', 'ResultCode', 'ResultDescription'];
+        foreach ( $response->Return->TransResult as $result ) {
+            $result = explode( ',', $result );
+            $result = array_combine( $trFormat, $result );
+            if ( $result['AuthCode'] && $result['StatusCode'] === 1 ) {
+                //Transaction approved
+                $command = 'AddInvoicePayment';
+                $data    = [
+                    'invoiceid' => $result['TransactionReference'],
+                    'transid'   => $result['TransactionID'],
+                    'gateway'   => $gatewayModuleName,
+                ];
+                $result = localAPI( $command, $data );
+                logTransaction( $gatewayModuleName, $response, 'success' );
+            } else {
+                //Transaction declined
+                logTransaction( $gatewayModuleName, null, 'failed' );
+                $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
+                header( 'Location: ' . $url );
+            }
+        }
+    }
 }

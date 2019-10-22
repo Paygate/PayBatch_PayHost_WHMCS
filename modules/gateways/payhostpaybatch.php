@@ -3,13 +3,13 @@
  * Copyright (c) 2019 PayGate (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
- * 
+ *
  * Released under the GNU General Public License
  *
  * This module facilitates PayGate payments by means of PayHost / PayBatch for WHMCS clients
  *
  * PayHost is used to initialise and vault card detail, successive payments are made using the vault and PayBatch
- * 
+ *
  */
 
 if ( !defined( "WHMCS" ) ) {
@@ -137,13 +137,14 @@ function payhostpaybatch_link( $params )
         $payHostSecretKey  = PAYGATETESTKEY;
         $payBatchSecretKey = PAYGATETESTKEY;
     } else {
-        $payHostId         = $params['payHostId'];
-        $payBatchId        = $params['payBatchId'];
+        $payHostId         = $params['payHostID'];
+        $payBatchId        = $params['payBatchID'];
         $payHostSecretKey  = $params['payHostSecretKey'];
         $payBatchSecretKey = $params['payBatchSecretKey'];
     }
 
-    $html = '';
+    $gatewayModuleName = basename( __FILE__, '.php' );
+    $html              = '';
 
     // Check if recurring payments and vaulting are allowed - if not, do not enable PayBatch
     $recurring   = $params['payhostpaybatch_recurring'];
@@ -211,7 +212,8 @@ function payhostpaybatch_link( $params )
         $item[] = intval( $amount * 100 ); // Transaction amount in ZA cents
         $data[] = $item;
 
-        // Use SoapClient to make request
+        // Use SoapClient to make requests
+        //First authorisation request
         $soap       = $payBatchSoap->getAuthRequest( $data );
         $wsdl       = PAYBATCHAPIWSDL;
         $options    = ['trace' => 1, 'login' => $payBatchId, 'password' => $payBatchSecretKey];
@@ -221,18 +223,13 @@ function payhostpaybatch_link( $params )
                 new SoapVar( $soap, XSD_ANYXML ),
             ] );
             if ( $result->Invalid == 0 ) {
-                // Detect module name from filename.
-                $gatewayModuleName = basename( __FILE__, '.php' );
-
-                $command = 'AddInvoicePayment';
-                $data    = [
-                    'invoiceid' => $invoiceId,
-                    'transid'   => $result->UploadID,
-                    'gateway'   => $gatewayModuleName,
-                ];
-                $result = localAPI( $command, $data );
-                logTransaction( $gatewayModuleName, (array) $result, 'success' );
-                callback3DSecureRedirect( $invoiceId, true );
+                $uploadId = $result->UploadID;
+                //Now make confirmation request to trigger actual payment attempt
+                $confirmXml    = $payBatchSoap->getConfirmRequest( $uploadId );
+                $confirmResult = $soapClient->__soapCall( 'Confirm', [
+                    new SoapVar( $confirmXml, XSD_ANYXML ),
+                ] );
+                logTransaction( $gatewayModuleName, $confirmResult, 'success' );
             }
         } catch ( SoapFault $fault ) {
 
@@ -272,6 +269,7 @@ function payhostpaybatch_link( $params )
             $result = $soapClient->__soapCall( 'SinglePayment', [
                 new SoapVar( $xml, XSD_ANYXML ),
             ] );
+
             if ( array_key_exists( 'Redirect', $result->WebPaymentResponse ) ) {
                 // Redirect to Payment Portal
                 // Store key values for return response
@@ -970,6 +968,28 @@ class paybatchsoap
             // Remove Auth tag - added in __soapCall
             $childrenOnly = str_replace( ['<Auth>', '</Auth>'], '', $soap );
 
+            return $childrenOnly;
+        } catch ( Exception $e ) {
+            return $e->getMessage();
+        }
+    }
+
+    public function getConfirmRequest( $uploadId )
+    {
+        try {
+            //use SimpleXmlElement for better control of children
+            $xml = new SimpleXMLElement( '<Query />' );
+
+            $xml->addChild( 'UploadID', $uploadId );
+
+            //use DomDocument to remove XML headers
+            $dom = new DOMDocument();
+            $dom->loadXML( $xml->asXML() );
+
+            $soap = $dom->saveXML( $dom->documentElement );
+
+            //Remove Confirm tag because we pass it in the __soapCall
+            $childrenOnly = str_replace( ['<Query>', '</Query>'], '', $soap );
             return $childrenOnly;
         } catch ( Exception $e ) {
             return $e->getMessage();
