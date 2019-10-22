@@ -1,0 +1,9 @@
+=====================================
+Date	  : Version: Description
+=====================================
+
+2019-07-16: v1.0.0 : Initial release.
+2019-10-21: v1.0.1 : Fixed case bug in ID.
+                     Added redirect to PayBatch as well.
+                     Added redirect to client invoices on failure.
+                     Added PayBatch notify.
