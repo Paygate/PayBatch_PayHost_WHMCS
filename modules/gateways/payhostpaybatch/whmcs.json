@@ -1,0 +1,24 @@
+{
+  "schema": "1.0",
+  "type": "whmcs-gateways",
+  "name": "paybatchpayhost",
+  "license": "proprietary",
+  "category": "payments",
+  "description": {
+    "name": "PayHost PayBatch",
+    "tagline": "Accept payments using PayHost and PayBatch",
+    "long": "PayGate provides a payment service for recurring transactions to merchants, using PayHost to process the initail transaction and PayBatch to process recurring transactions."
+  },
+  "logo": {
+    "filename": "logo.png"
+  },
+  "support": {
+    "docs_url": "https://github.com/PayGate/PayBatch_PayHost_WHMCS"
+  },
+  "authors": [
+    {
+      "name": "PayGate (Pty) Ltd",
+      "homepage": "https://paygate.co.za"
+    }
+  ]
+}

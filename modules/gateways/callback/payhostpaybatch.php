@@ -14,15 +14,36 @@
 require_once __DIR__ . '/../../../init.php';
 require_once __DIR__ . '/../../../includes/gatewayfunctions.php';
 require_once __DIR__ . '/../../../includes/invoicefunctions.php';
+require_once '../payhostpaybatch/lib/constants.php';
+
+if ( !defined( "WHMCS" ) ) {
+    die( "This file cannot be accessed directly" );
+}
 
 use WHMCS\Database\Capsule;
 
-define( "PAYHOSTAPI", 'https://secure.paygate.co.za/payhost/process.trans' );
-define( "PAYHOSTAPIWSDL", 'https://secure.paygate.co.za/payhost/process.trans/?wsdl' );
-define( "PAYBATCHAPI", 'https://secure.paygate.co.za/paybatch/1.2/process.trans' );
-define( "PAYBATCHAPIWSDL", 'https://secure.paygate.co.za/paybatch/1.2/PayBatch.wsdl' );
-define( "PAYGATETESTID", '10011072130' );
-define( "PAYGATETESTKEY", 'test' );
+if ( !defined( '_DB_PREFIX_' ) ) {
+    define( '_DB_PREFIX_', 'tbl' );
+}
+
+/**
+ * Check for existence of payhostpaybatch table and create if not
+ */
+if ( !function_exists( 'createPayhostpaybatchTable' ) ) {
+    function createPayhostpaybatchTable()
+    {
+        $query = "create table if not exists `" . _DB_PREFIX_ . "payhostpaybatch` (";
+        $query .= " id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY, ";
+        $query .= " recordtype VARCHAR(20) NOT NULL, ";
+        $query .= " recordid VARCHAR(50) NOT NULL, ";
+        $query .= " recordval VARCHAR(50) NOT NULL, ";
+        $query .= " dbid VARCHAR(10) NOT NULL DEFAULT '1')";
+
+        return full_query( $query );
+    }
+}
+
+createPayhostpaybatchTable();
 
 /**
  * @param $pgid
@@ -35,10 +56,12 @@ define( "PAYGATETESTKEY", 'test' );
  */
 function getQuery( $pgid, $key, $reqid )
 {
-    $userId = $_SESSION['uid'];
-    $token  = Capsule::table( 'tblclients' )
-        ->where( 'id', $userId )
-        ->value( 'cardnum' );
+    $userId             = $_SESSION['uid'];
+    $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
+    $token              = Capsule::table( $tblpayhostpaybatch )
+        ->where( 'recordtype', 'clientdetail' )
+        ->where( 'recordid', $userId )
+        ->value( 'recordval' );
 
     $soap = <<<SOAP
             <ns1:SingleFollowUpRequest>
@@ -135,9 +158,24 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
         $transactionId = $response['transactionId'];
 
         // Store the token
-        Capsule::table( 'tblclients' )
-            ->where( 'id', $userId )
-            ->update( ['cardnum' => $token] );
+        $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
+        $clientExists       = Capsule::table( $tblpayhostpaybatch )
+            ->where( 'recordtype', 'clientdetail' )
+            ->where( 'recordid', $userId )
+            ->value( 'recordval' );
+
+        if ( strlen( $clientExists ) > 0 ) {
+            Capsule::table( $tblpayhostpaybatch )
+                ->where( 'recordtype', 'clientdetail' )
+                ->where( 'recordid', $userId )
+                ->update( ['recordval' => $token] );
+        } else {
+            Capsule::table( $tblpayhostpaybatch )
+                ->insert( ['recordtype' => 'clientdetail',
+                    'recordid'             => $userId,
+                    'recordval'            => $token,
+                ] );
+        }
 
         // Check the reference validity
         if ( $reference == $_SESSION['REFERENCE'] ) {
@@ -156,39 +194,5 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
         logTransaction( $gatewayModuleName, null, 'failed' );
         $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
         header( 'Location: ' . $url );
-    }
-} else {
-    // PayBatch response
-    $raw = file_get_contents( 'php://input' );
-    if ( $raw && $raw != '' ) {
-        $a = preg_replace( '/<\/?SOAP-ENV:.*>/', '', $raw );
-        $a = preg_replace( '/(<)(\/?)ns1:/', '${1}${2}', $a );
-        $a = preg_replace( '/\n/', '', $a );
-        $a = preg_replace( '/(>) +(<)/', '${1}${2}', $a );
-
-        $response     = new SimpleXMLElement( $a );
-        $dateUploaded = date_create( $response->Return->DateUploaded->__toString() )->getTimestamp();
-
-        $trFormat = ['TransactionID', 'TransactionType', 'TransactionReference', 'AuthCode', 'StatusCode', 'StatusDescription', 'ResultCode', 'ResultDescription'];
-        foreach ( $response->Return->TransResult as $result ) {
-            $result = explode( ',', $result );
-            $result = array_combine( $trFormat, $result );
-            if ( $result['AuthCode'] && $result['StatusCode'] === 1 ) {
-                //Transaction approved
-                $command = 'AddInvoicePayment';
-                $data    = [
-                    'invoiceid' => $result['TransactionReference'],
-                    'transid'   => $result['TransactionID'],
-                    'gateway'   => $gatewayModuleName,
-                ];
-                $result = localAPI( $command, $data );
-                logTransaction( $gatewayModuleName, $response, 'success' );
-            } else {
-                //Transaction declined
-                logTransaction( $gatewayModuleName, null, 'failed' );
-                $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
-                header( 'Location: ' . $url );
-            }
-        }
     }
 }
