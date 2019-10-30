@@ -7,3 +7,4 @@ Date	  : Version: Description
                      Added redirect to PayBatch as well.
                      Added redirect to client invoices on failure.
                      Added PayBatch notify.
+2019-10-31: v1.0.2 : Better recurring handling using dedicated PayBatch cron scripts.
