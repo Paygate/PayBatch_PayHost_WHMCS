@@ -12,6 +12,11 @@
  *
  */
 
+// Require libraries needed for gateway module functions
+require_once __DIR__ . '/../../init.php';
+require_once __DIR__ . '/../../includes/gatewayfunctions.php';
+require_once __DIR__ . '/../../includes/invoicefunctions.php';
+
 require_once 'payhostpaybatch/lib/constants.php';
 require_once 'payhostpaybatch/lib/payhostsoap.class.php';
 
@@ -43,6 +48,11 @@ if ( !function_exists( 'createPayhostpaybatchTable' ) ) {
 }
 
 createPayhostpaybatchTable();
+
+if ( isset( $_POST['INITIATE'] ) && $_POST['INITIATE'] == 'initiate' ) {
+    $params = json_decode( base64_decode( $_POST['jparams'] ), true );
+    payhostpaybatch_initiate( $params );
+}
 
 /**
  * Define module related meta data
@@ -145,6 +155,27 @@ function payhostpaybatch_config()
  */
 function payhostpaybatch_link( $params )
 {
+    $jparams = base64_encode( json_encode( $params ) );
+    $html    = <<<HTML
+    <form method="post" action="modules/gateways/payhostpaybatch.php">
+    <input type="hidden" name="INITIATE" value="initiate">
+    <input type="hidden" name="jparams" value="$jparams">
+    <input type="submit" value="Pay using PayHost">
+</form>
+HTML;
+
+    return $html;
+}
+
+/**
+ * Payment process
+ *
+ * Process payment to PayHost
+ *
+ * @return string
+ */
+function payhostpaybatch_initiate( $params )
+{
     // Check if test mode or not
     $testMode = $params['testMode'];
     if ( $testMode == 'on' ) {
@@ -233,8 +264,13 @@ function payhostpaybatch_link( $params )
     $data['retUrl']        = $returnUrl;
     $data['notifyURL']     = $notifyUrl;
     $data['recurring']     = $usePayBatch;
-    $data['vaulting']      = $vaulting;
-    $data['vaultId']       = $vaultId;
+    if ( $vaulting ) {
+        $data['vaulting'] = true;
+    }
+    if ( $vaultId != '' && $vaulting ) {
+        $data['vaultId'] = $vaultId;
+    }
+
     $payhostSoap->setData( $data );
 
     $xml = $payhostSoap->getSOAP();
@@ -273,10 +309,9 @@ function payhostpaybatch_link( $params )
         <input type="hidden" name="{$inputs[2]->key}" value="{$inputs[2]->value}" />
         <input type="hidden" name="{$inputs[3]->key}" value="{$inputs[3]->value}" />
         </form>
-        <script type="text/javascript">
-        document.forms['payhost'].submit();
-</script>
+        <script type="text/javascript"> document.forms['payhost'].submit();</script>
 HTML;
+                echo $html;
             }
         } else {
             // Process response - doesn't happen
@@ -284,7 +319,7 @@ HTML;
     } catch ( SoapFault $f ) {
         var_dump( $f );
     }
-    return $html;
+    echo $html;
 }
 
 /**
