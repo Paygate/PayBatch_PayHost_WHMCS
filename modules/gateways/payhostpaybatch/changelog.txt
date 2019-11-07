@@ -8,3 +8,5 @@ Date	  : Version: Description
                      Added redirect to client invoices on failure.
                      Added PayBatch notify.
 2019-10-31: v1.0.2 : Better recurring handling using dedicated PayBatch cron scripts.
+2019-11-07: v1.0.3 : Added check for valid token format in callback.
+                     Added "Pay" button to invoicing.

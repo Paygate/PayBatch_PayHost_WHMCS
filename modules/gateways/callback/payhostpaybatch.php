@@ -80,6 +80,7 @@ SOAP;
         $result = $sc->__soapCall( 'SingleFollowUp', [
             new SoapVar( $soap, XSD_ANYXML ),
         ] );
+
         if ( $result ) {
             $vaultId       = $result->QueryResponse->Status->VaultId;
             $reference     = $result->QueryResponse->Status->Reference;
@@ -145,36 +146,52 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
             }
         } else {
             // Validity not verified
+            // Failed
+            logTransaction( $gatewayModuleName, null, 'failed' );
+            $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
+            header( 'Location: ' . $url );
         }
     } else {
         // Transaction failed
+        // Failed
+        logTransaction( $gatewayModuleName, null, 'failed' );
+        $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
+        header( 'Location: ' . $url );
     }
 
     // Make a request to get the Vault Id
     if ( $verified ) {
         $response      = getQuery( $payHostId, $payHostSecretKey, $payRequestId );
-        $token         = $response['token'];
         $reference     = $response['reference'];
         $transactionId = $response['transactionId'];
 
-        // Store the token
-        $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-        $clientExists       = Capsule::table( $tblpayhostpaybatch )
-            ->where( 'recordtype', 'clientdetail' )
-            ->where( 'recordid', $userId )
-            ->value( 'recordval' );
+        // Check for token and valid format
+        $vaultPattern = '/^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$/';
+        $token        = !empty( $response['token'] ) ? $response['token'] : null;
+        if ( preg_match( $vaultPattern, $token ) != 1 ) {
+            $token = null;
+        }
 
-        if ( strlen( $clientExists ) > 0 ) {
-            Capsule::table( $tblpayhostpaybatch )
+        // Store the token if valid
+        if ( $token ) {
+            $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
+            $clientExists       = Capsule::table( $tblpayhostpaybatch )
                 ->where( 'recordtype', 'clientdetail' )
                 ->where( 'recordid', $userId )
-                ->update( ['recordval' => $token] );
-        } else {
-            Capsule::table( $tblpayhostpaybatch )
-                ->insert( ['recordtype' => 'clientdetail',
-                    'recordid'             => $userId,
-                    'recordval'            => $token,
-                ] );
+                ->value( 'recordval' );
+
+            if ( strlen( $clientExists ) > 0 ) {
+                Capsule::table( $tblpayhostpaybatch )
+                    ->where( 'recordtype', 'clientdetail' )
+                    ->where( 'recordid', $userId )
+                    ->update( ['recordval' => $token] );
+            } else {
+                Capsule::table( $tblpayhostpaybatch )
+                    ->insert( ['recordtype' => 'clientdetail',
+                        'recordid'             => $userId,
+                        'recordval'            => $token,
+                    ] );
+            }
         }
 
         // Check the reference validity

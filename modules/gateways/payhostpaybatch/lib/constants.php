@@ -15,7 +15,7 @@ define( "PAYHOSTAPIWSDL", 'https://secure.paygate.co.za/payhost/process.trans/?w
 define( "PAYBATCHAPI", 'https://secure.paygate.co.za/paybatch/1.2/process.trans' );
 define( "PAYBATCHAPIWSDL", 'https://secure.paygate.co.za/paybatch/1.2/PayBatch.wsdl' );
 define( "PAYGATETESTID", '10011072130' );
-define( "PAYGATETESTKEY", 'secret' );
+define( "PAYGATETESTKEY", 'test' );
 define( "GATEWAY", 'payhostpaybatch' );
 
 $docroot = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'];

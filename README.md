@@ -1,12 +1,12 @@
 # PayBatch_PayHost_WHMCS
-## PayGate PayBatch (with PayHost tokenization) plugin v1.0.2 for WHMCS v7.7.0
+## PayGate PayBatch (with PayHost tokenization) plugin v1.0.3 for WHMCS v7.7.0
 
 This is the PayGate PayBatch (with PayHost tokenization) for WHMCS. Please feel free to contact the PayGate support team at support@paygate.co.za should you require any assistance.
 
 This module is in the first release; we suggest thorough testing with your use case before proceeding to a live enviroment
 
 ## Installation
-Please navigate to the [releases page](https://github.com/PayGate/PayBatch_PayHost_WHMCS/releases), download the latest release (v1.0.2) and unzip. You will them be able to follow the integration guide which is included in the zip.
+Please navigate to the [releases page](https://github.com/PayGate/PayBatch_PayHost_WHMCS/releases), download the latest release (v1.0.3) and unzip. You will them be able to follow the integration guide which is included in the zip.
 
 ## Collaboration
 
