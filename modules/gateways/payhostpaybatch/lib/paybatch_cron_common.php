@@ -39,6 +39,16 @@ while ( $item = $r->fetch_array( MYSQLI_ASSOC ) ) {
     $params[$item['setting']] = $item['value'];
 }
 
+//Get system currencies
+$query = "select * from `" . _DB_PREFIX_ . "currencies`";
+$stmt  = $dbc->prepare( $query );
+$stmt->execute();
+$r          = $stmt->get_result();
+$currencies = [];
+while ( $item = $r->fetch_assoc() ) {
+    $currencies[$item['id']] = ['code' => $item['code'], 'rate' => $item['rate']];
+}
+
 // Check if test mode or not
 $testMode = $params['testMode'];
 if ( $testMode == 'on' ) {

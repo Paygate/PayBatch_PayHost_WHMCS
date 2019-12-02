@@ -83,12 +83,12 @@ function payhostpaybatch_config()
     return array(
         // The friendly display name for a payment gateway should be
         // defined here for backwards compatibility
-        'FriendlyName'              => array(
+        'FriendlyName'                => array(
             'Type'  => 'System',
             'Value' => 'PayGate PayHost / PayBatch Gateway',
         ),
         // A text field type allows for single line text input
-        'payHostID'                 => array(
+        'payHostID'                   => array(
             'FriendlyName' => 'PayHost ID',
             'Type'         => 'text',
             'Size'         => '11',
@@ -96,7 +96,7 @@ function payhostpaybatch_config()
             'Description'  => 'Enter your PayHost ID here',
         ),
         // A password field type allows for masked text input
-        'payHostSecretKey'          => array(
+        'payHostSecretKey'            => array(
             'FriendlyName' => 'PayHost Secret Key',
             'Type'         => 'password',
             'Size'         => '32',
@@ -104,7 +104,7 @@ function payhostpaybatch_config()
             'Description'  => 'Enter your PayHost password here',
         ),
         // A text field type allows for single line text input
-        'payBatchID'                => array(
+        'payBatchID'                  => array(
             'FriendlyName' => 'PayBatch ID',
             'Type'         => 'text',
             'Size'         => '11',
@@ -112,7 +112,7 @@ function payhostpaybatch_config()
             'Description'  => 'Enter your PayBatch ID here',
         ),
         // A password field type allows for masked text input
-        'payBatchSecretKey'         => array(
+        'payBatchSecretKey'           => array(
             'FriendlyName' => 'PayBatch Secret Key',
             'Type'         => 'password',
             'Size'         => '32',
@@ -120,26 +120,32 @@ function payhostpaybatch_config()
             'Description'  => 'Enter your PayBatch password here',
         ),
         // The yesno field type displays a single checkbox option
-        'testMode'                  => array(
+        'testMode'                    => array(
             'FriendlyName' => 'Test Mode',
             'Type'         => 'yesno',
             'Description'  => 'Tick to enable test mode',
         ),
         // Enable or disable 3D Secure Authentication
-        '3D'                        => array(
+        '3D'                          => array(
             'FriendlyName' => '3D Secure Authentication',
             'Type'         => 'yesno',
             'Default'      => 'Yes',
         ),
         // Enable or disable card vaulting
-        'payhostpaybatch_vaulting'  => array(
+        'payhostpaybatch_vaulting'    => array(
             'FriendlyName' => 'Allow card vaulting',
             'Type'         => 'yesno',
             'Default'      => 'Yes',
         ),
         // Enable or disable recurring payments
-        'payhostpaybatch_recurring' => array(
+        'payhostpaybatch_recurring'   => array(
             'FriendlyName' => 'Allow recurring payments',
+            'Type'         => 'yesno',
+            'Default'      => 'Yes',
+        ),
+        // Enable or disable paybatch auto currency conversion
+        'payhostpaybatch_autoconvert' => array(
+            'FriendlyName' => 'Enable auto convert to ZAR for PayBatch',
             'Type'         => 'yesno',
             'Default'      => 'Yes',
         ),

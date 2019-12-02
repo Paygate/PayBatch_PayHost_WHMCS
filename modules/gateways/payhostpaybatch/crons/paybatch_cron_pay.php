@@ -14,7 +14,7 @@
 
 require_once '../../../../init.php';
 include_once '../lib/constants.php';
-include_once '../../../../configuration.php';
+require_once '../../../../configuration.php';
 include_once '../lib/paybatch_cron_common.php';
 include_once '../lib/paybatchsoap.class.php';
 
@@ -22,17 +22,29 @@ $payBatchSoap = new paybatchsoap( DOC_ROOT );
 
 $invoices = getInvoices1();
 
+//Get currency id for ZAR
+$zarId = null;
+foreach ( $currencies as $id => $currency ) {
+    if ( $currency['code'] === 'ZAR' ) {
+        $zarId = $id;
+    }
+}
+
 if ( $invoices ) {
     $today  = new DateTime();
     $data   = [];
     $tokens = [];
 
     foreach ( $invoices as $invoice ) {
+        $currency  = $invoice['currency'];
         $userid    = $invoice['userid'];
         $firstname = $invoice['firstname'];
         $lastname  = $invoice['lastname'];
         $duedate   = $invoice['duedate'];
         $total     = $invoice['total'];
+        if ( $currency !== $zarId && $params['payhostpaybatch_autoconvert'] == 'on' ) {
+            $total /= $currencies[$currency]['rate'];
+        }
         $currencycode = 'ZAR'; // PayBatch only handles ZAR
         $status       = $invoice['status'];
         $invoiceId    = $invoice['id'];
