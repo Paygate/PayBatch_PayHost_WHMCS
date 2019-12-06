@@ -12,6 +12,12 @@ Please navigate to the [releases page](https://github.com/PayGate/PayBatch_PayHo
 
 Please submit pull requests with any tweaks, features or fixes you would like to share.
 
+## Supported Acquiring Banks
+
+- ABSA Bank
+- Standard Bank South Africa
+- Nedbank
+
 ## About PayBatch
 
 [PayBatch](https://www.paygate.co.za/paygate-products/paybatch/) allows you to capture and process batched card transactions. You create and prepare the card batch, this can be manually uploaded using the Merchant Access (MAP) Portal or submitted via an API integration.
