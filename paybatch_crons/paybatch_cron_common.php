@@ -1,12 +1,31 @@
 <?php
 /*
- * Copyright (c) 2019 PayGate (Pty) Ltd
+ * Copyright (c) 2020 PayGate (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
  * Released under the GNU General Public License
  *
  */
+
+require_once './paybatch_cron_config.php';
+
+define( "PAYHOSTAPI", 'https://secure.paygate.co.za/payhost/process.trans' );
+define( "PAYHOSTAPIWSDL", 'https://secure.paygate.co.za/payhost/process.trans/?wsdl' );
+define( "PAYBATCHAPI", 'https://secure.paygate.co.za/paybatch/1.2/process.trans' );
+define( "PAYBATCHAPIWSDL", 'https://secure.paygate.co.za/paybatch/1.2/PayBatch.wsdl' );
+define( "PAYGATETESTID", '10011072130' );
+define( "PAYGATETESTKEY", 'test' );
+define( "GATEWAY", 'payhostpaybatch' );
+
+$docroot = '';
+if ( isset( $_SERVER ) && isset( $_SERVER['REQUEST_SCHEME'] ) ) {
+    $docroot = $_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['SERVER_NAME'];
+    if ( isset( $_SERVER['SERVER_PORT'] ) ) {
+        $docroot .= ':' . $_SERVER['SERVER_PORT'];
+    }
+}
+$docroot .= '/';
 
 try {
     $dbc = new mysqli( $db_host, $db_username, $db_password, $db_name );
@@ -39,7 +58,7 @@ while ( $item = $r->fetch_array( MYSQLI_ASSOC ) ) {
     $params[$item['setting']] = $item['value'];
 }
 
-//Get system currencies
+// Get system currencies
 $query = "select * from `" . _DB_PREFIX_ . "currencies`";
 $stmt  = $dbc->prepare( $query );
 $stmt->execute();
@@ -71,13 +90,14 @@ function callApi( $options )
     $whmcsUrl = DOC_ROOT . 'includes/api.php';
 
     $postfields = [
-        'identifier'   => $api_identifier,
-        'secret'       => $api_secret,
-        'accesskey'    => $access_key,
+        'username'     => $api_identifier,
+        'password'     => $api_secret,
         'responsetype' => 'json',
     ];
 
     $postfields = array_merge( $postfields, $options );
+
+    echo 'In callApi: ' . json_encode( $postfields );
 
     // Call the API
     $ch = curl_init();
