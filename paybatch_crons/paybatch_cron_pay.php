@@ -1,6 +1,6 @@
 <?php
 /*
- * Copyright (c) 2019 PayGate (Pty) Ltd
+ * Copyright (c) 2020 PayGate (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -12,17 +12,15 @@
  *
  */
 
-require_once '../../../../init.php';
-include_once '../lib/constants.php';
-require_once '../../../../configuration.php';
-include_once '../lib/paybatch_cron_common.php';
-include_once '../lib/paybatchsoap.class.php';
+require_once './paybatch_cron_config.php';
+require_once './paybatch_cron_common.php';
+include_once './paybatchsoap.class.php';
 
-$payBatchSoap = new paybatchsoap( DOC_ROOT );
+$payBatchSoap = new paybatchsoap();
 
 $invoices = getInvoices1();
 
-//Get currency id for ZAR
+// Get currency id for ZAR
 $zarId = null;
 foreach ( $currencies as $id => $currency ) {
     if ( $currency['code'] === 'ZAR' ) {
@@ -31,52 +29,35 @@ foreach ( $currencies as $id => $currency ) {
 }
 
 if ( $invoices ) {
-    $today  = new DateTime();
-    $data   = [];
-    $tokens = [];
+    $today = new DateTime();
+    $data  = [];
 
     foreach ( $invoices as $invoice ) {
-        $currency  = $invoice['currency'];
-        $userid    = $invoice['userid'];
-        $firstname = $invoice['firstname'];
-        $lastname  = $invoice['lastname'];
-        $duedate   = $invoice['duedate'];
-        $total     = $invoice['total'];
-        if ( $currency !== $zarId && $params['payhostpaybatch_autoconvert'] == 'on' ) {
-            $total /= $currencies[$currency]['rate'];
-        }
+        $userid       = $invoice['userid'];
+        $firstname    = $invoice['firstname'];
+        $lastname     = $invoice['lastname'];
+        $duedate      = $invoice['duedate'];
+        $total        = $invoice['total'];
         $currencycode = 'ZAR'; // PayBatch only handles ZAR
         $status       = $invoice['status'];
         $invoiceId    = $invoice['id'];
 
         if ( new DateTime( $duedate ) <= $today && $status == 'Unpaid' && ( $currencycode == 'ZAR' || !$currencycode ) ) {
-            if ( isset( $tokens[$userid] ) ) {
-                $vaultId = $tokens[$userid];
-            } else {
-                // Need to make api call to get the user token
-                $token = $invoice['cardnum'];
-                if ( $token ) {
-                    $vaultPattern = '/^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$/';
-                    if ( preg_match( $vaultPattern, $token ) != 1 ) {
-                        continue;
-                    }
-                    $tokens[$userid] = $token;
-                    $vaultId         = $token;
-                } else {
-                    $tokens[$userid] = null;
-                    continue;
-                }
+            if ( !empty( $invoice['cardnum'] ) ) {
+                $vaultId = $invoice['cardnum'];
+                $item    = [];
+                $item[]  = 'A'; // Authorisation request
+                $item[]  = $invoiceId; // Transaction reference - use invoice id
+                $item[]  = $firstname . '_' . $lastname; // User name - not used anywhere
+                $item[]  = $vaultId; // Vault Id for client card
+                $item[]  = '00'; // Budget period - no budget
+                $item[]  = intval( $total * 100 ); // Transaction amount in ZA cents
+                $data[]  = $item;
             }
-            $item   = [];
-            $item[] = 'A'; // Authorisation request
-            $item[] = $invoiceId; // Transaction reference - use invoice id
-            $item[] = $firstname . '_' . $lastname; // User name - not used anywhere
-            $item[] = $vaultId; // Vault Id for client card
-            $item[] = '00'; // Budget period - no budget
-            $item[] = intval( $total * 100 ); // Transaction amount in ZA cents
-            $data[] = $item;
         }
     }
+
+    echo 'Invoices for processing: ' . json_encode( $data ) . PHP_EOL;
 
     $errors   = false;
     $invalids = true;
@@ -87,11 +68,13 @@ if ( $invoices ) {
                 $soap    = $payBatchSoap->getAuthRequest( $data );
                 $wsdl    = PAYBATCHAPIWSDL;
                 $options = ['trace' => 1, 'login' => $payBatchId, 'password' => $payBatchSecretKey];
+                echo 'Options: ' . json_encode( $options ) . PHP_EOL;
 
                 $soapClient = new SoapClient( $wsdl, $options );
                 $result     = $soapClient->__soapCall( 'Auth', [
                     new SoapVar( $soap, XSD_ANYXML ),
                 ] );
+                echo 'Result: ' . print_r( $result ) . PHP_EOL;
                 if ( $result->Invalid == 0 ) {
                     $invalids = false;
                     $uploadId = $result->UploadID;
@@ -137,15 +120,61 @@ if ( $invoices ) {
 function getInvoices1()
 {
     global $dbc;
-    $query = "select `" . _DB_PREFIX_ . "invoices`.*, firstname, lastname, cardnum, currency from `" . _DB_PREFIX_ . "invoices` ";
-    $query .= " inner join `" . _DB_PREFIX_ . "clients` on `" . _DB_PREFIX_ . "clients`.id = `" . _DB_PREFIX_ . "invoices`.userid ";
-    $query .= " where `" . _DB_PREFIX_ . "invoices`.status = 'Unpaid' and paymentmethod = '" . GATEWAY . "'";
+    $prefix = _DB_PREFIX_;
+    $pm     = GATEWAY;
+
+    $query = <<<QUERY
+select i.*, firstname, lastname, recordval cardnum
+from {$prefix}invoices i
+inner join {$prefix}clients t on i.userid = t.id
+inner join {$prefix}payhostpaybatch pay on pay.recordid = i.userid
+where i.status = 'Unpaid' and paymentmethod = '{$pm}'
+and pay.recordtype = 'clientdetail'
+QUERY;
+
     $stmt = $dbc->prepare( $query );
     $stmt->execute();
     $result   = $stmt->get_result();
     $invoices = [];
     while ( $invoice = $result->fetch_assoc() ) {
         $invoices[] = $invoice;
+    }
+
+    return $invoices;
+}
+
+function getInvoicesApi()
+{
+    global $api_identifier, $api_secret, $api_url, $api_access_key;
+    $postFields = [
+        'username'     => $api_identifier,
+        'password'     => $api_secret,
+        'action'       => 'GetInvoices',
+        'status'       => 'Unpaid',
+        'responsetype' => 'json',
+        'accesskey'    => $api_access_key,
+    ];
+
+    $ch = curl_init();
+    curl_setopt( $ch, CURLOPT_URL, $api_url );
+    curl_setopt( $ch, CURLOPT_POST, 1 );
+    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
+    curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query( $postFields ) );
+    $response = curl_exec( $ch );
+    $error    = curl_error( $ch );
+
+    $invoices = [];
+    if ( $response && $response != '' ) {
+        try {
+            $rawInvoices = json_decode( $response->invoices->invoice );
+            foreach ( $rawInvoices as $rawInvoice ) {
+                if ( $rawInvoice->paymentmethod === GATEWAY ) {
+
+                }
+            }
+        } catch ( Exception $exception ) {
+            die( 'Invoices could not be retrieved: ' . $exception->getMessage() );
+        }
     }
 
     return $invoices;

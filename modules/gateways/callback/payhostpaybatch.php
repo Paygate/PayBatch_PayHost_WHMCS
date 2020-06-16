@@ -1,6 +1,6 @@
 <?php
 /*
- * Copyright (c) 2019 PayGate (Pty) Ltd
+ * Copyright (c) 2020 PayGate (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -131,38 +131,30 @@ if ( $testMode == 'on' ) {
 
 if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) ) {
     // PayHost postback
+    $payRequestId       = filter_var( $_POST['PAY_REQUEST_ID'] );
+    $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
+    $reference          = Capsule::table( $tblpayhostpaybatch )
+        ->where( 'recordtype', 'transactionrecord' )
+        ->where( 'recordid', $payRequestId )
+        ->value( 'recordval' );
 
     $status   = filter_var( $_POST['TRANSACTION_STATUS'], FILTER_SANITIZE_STRING );
     $verified = false;
-    if ( $status == 1 ) {
-        // Success
-        // Verify transaction key
-        $payRequestId = filter_var( $_POST['PAY_REQUEST_ID'] );
-        if ( $payRequestId == $_SESSION['PAY_REQUEST_ID'] ) {
-            $checkString = $payHostId . $payRequestId . $status . $_SESSION['REFERENCE'] . $payHostSecretKey;
-            $check       = md5( $checkString );
-            if ( $check == filter_var( $_POST['CHECKSUM'] ) ) {
-                $verified = true;
-            }
-        } else {
-            // Validity not verified
-            // Failed
-            logTransaction( $gatewayModuleName, null, 'failed' );
-            $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
-            header( 'Location: ' . $url );
-        }
-    } else {
-        // Transaction failed
+
+    // Verify transaction key
+    $checkString = $payHostId . $payRequestId . $status . $reference . $payHostSecretKey;
+    $check       = md5( $checkString );
+    $verified    = hash_equals( $check, $_POST['CHECKSUM'] );
+    if ( !$verified ) {
+        // Validity not verified
         // Failed
-        logTransaction( $gatewayModuleName, null, 'failed' );
-        $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
-        header( 'Location: ' . $url );
+        logActivity( 'Validity not verified: ' . $payRequestId . '_' . $reference );
+        callback3DSecureRedirect( $reference, false );
     }
 
     // Make a request to get the Vault Id
-    if ( $verified ) {
+    if ( $verified && $status == 1 ) {
         $response      = getQuery( $payHostId, $payHostSecretKey, $payRequestId );
-        $reference     = $response['reference'];
         $transactionId = $response['transactionId'];
 
         // Check for token and valid format
@@ -174,8 +166,7 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
 
         // Store the token if valid
         if ( $token ) {
-            $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-            $clientExists       = Capsule::table( $tblpayhostpaybatch )
+            $clientExists = Capsule::table( $tblpayhostpaybatch )
                 ->where( 'recordtype', 'clientdetail' )
                 ->where( 'recordid', $userId )
                 ->value( 'recordval' );
@@ -187,29 +178,28 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
                     ->update( ['recordval' => $token] );
             } else {
                 Capsule::table( $tblpayhostpaybatch )
-                    ->insert( ['recordtype' => 'clientdetail',
-                        'recordid'             => $userId,
-                        'recordval'            => $token,
+                    ->insert( [
+                        'recordtype' => 'clientdetail',
+                        'recordid'   => $userId,
+                        'recordval'  => $token,
                     ] );
             }
         }
 
-        // Check the reference validity
-        if ( $reference == $_SESSION['REFERENCE'] ) {
-            $command = 'AddInvoicePayment';
-            $data    = [
-                'invoiceid' => $reference,
-                'transid'   => $transactionId,
-                'gateway'   => $gatewayModuleName,
-            ];
-            $result = localAPI( $command, $data );
-            logTransaction( $gatewayModuleName, $response, 'success' );
-            callback3DSecureRedirect( $reference, true );
-        }
+        $command = 'AddInvoicePayment';
+        $data    = [
+            'invoiceid' => $reference,
+            'transid'   => $transactionId,
+            'gateway'   => $gatewayModuleName,
+        ];
+        $result = localAPI( $command, $data );
+        logTransaction( $gatewayModuleName, $response, 'success' );
+        logActivity( 'Payment successful: ' . $payRequestId . '_' . $reference );
+        callback3DSecureRedirect( $reference, true );
     } else {
         // Failed
         logTransaction( $gatewayModuleName, null, 'failed' );
-        $url = $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] . 'clientarea.php?action=invoices';
-        header( 'Location: ' . $url );
+        logActivity( 'Payment failed: ' . $payRequestId . '_' . $reference );
+        callback3DSecureRedirect( $reference, false );
     }
 }
