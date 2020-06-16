@@ -1,6 +1,6 @@
 <?php
 /*
- * Copyright (c) 2019 PayGate (Pty) Ltd
+ * Copyright (c) 2020 PayGate (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -204,14 +204,13 @@ function payhostpaybatch_initiate( $params )
     $usePayBatch = false;
 
     // System Parameters
-    $companyName                             = $params['companyname'];
-    $systemUrl                               = $params['systemurl'];
-    $_SESSION['_PAYHOSTPAYBATCH_SYSTEM_URL'] = $systemUrl;
-    $returnUrl                               = $params['returnurl'];
-    $langPayNow                              = $params['langpaynow'];
-    $moduleDisplayName                       = $params['name'];
-    $moduleName                              = $params['paymentmethod'];
-    $whmcsVersion                            = $params['whmcsVersion'];
+    $companyName       = $params['companyname'];
+    $systemUrl         = $params['systemurl'];
+    $returnUrl         = $params['returnurl'];
+    $langPayNow        = $params['langpaynow'];
+    $moduleDisplayName = $params['name'];
+    $moduleName        = $params['paymentmethod'];
+    $whmcsVersion      = $params['whmcsVersion'];
 
     // Callback urls
     $notifyUrl = $systemUrl . 'modules/gateways/callback/payhostpaybatch.php';
@@ -293,8 +292,21 @@ function payhostpaybatch_initiate( $params )
         if ( array_key_exists( 'Redirect', $result->WebPaymentResponse ) ) {
             // Redirect to Payment Portal
             // Store key values for return response
-            $_SESSION['PAY_REQUEST_ID'] = $result->WebPaymentResponse->Redirect->UrlParams[1]->value;
-            $_SESSION['REFERENCE']      = $result->WebPaymentResponse->Redirect->UrlParams[2]->value;
+
+            Capsule::table( $tblpayhostpaybatch )
+                ->insert( [
+                    'recordtype' => 'transactionrecord',
+                    'recordid'   => $result->WebPaymentResponse->Redirect->UrlParams[1]->value,
+                    'recordval'  => $result->WebPaymentResponse->Redirect->UrlParams[2]->value,
+                    'dbid'       => time(),
+                ] );
+
+            // Delete records which are older than 24 hours
+            $expiryTime = time() - 24 * 3600;
+            Capsule::table( $tblpayhostpaybatch )
+                ->where( 'dbid', '>', 1 )
+                ->where( 'dbid', '<', $expiryTime )
+                ->delete();
 
             // Do redirect
             // First check that the checksum is valid

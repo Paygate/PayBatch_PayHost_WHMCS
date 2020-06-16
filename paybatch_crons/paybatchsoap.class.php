@@ -49,21 +49,10 @@ class paybatchsoap
 
     protected $batchReference = 'PayBatch_';
 
-    public function __construct( $notifyUrl )
+    public function __construct()
     {
         $this->batchReference = date( 'Y-m-d' ) . '_' . uniqid();
-        $this::$notifyUrl     = $notifyUrl;
-    }
-
-    /**
-     * @param $data array of batchline type
-     */
-    public function setBatchData( $data )
-    {
-        $this->batchData = [];
-        foreach ( $data as $line ) {
-            $this->batchData[] = $line;
-        }
+        $this::$notifyUrl     = 'https://www.xtestyz854.com';
     }
 
     /**
@@ -101,6 +90,17 @@ class paybatchsoap
             return $childrenOnly;
         } catch ( Exception $e ) {
             return $e->getMessage();
+        }
+    }
+
+    /**
+     * @param $data array of batchline type
+     */
+    public function setBatchData( $data )
+    {
+        $this->batchData = [];
+        foreach ( $data as $line ) {
+            $this->batchData[] = $line;
         }
     }
 
