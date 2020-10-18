@@ -11,7 +11,7 @@
  */
 
 define( "PAYHOSTAPI", 'https://secure.paygate.co.za/payhost/process.trans' );
-define( "PAYHOSTAPIWSDL", 'https://secure.paygate.co.za/payhost/process.trans/?wsdl' );
+define( "PAYHOSTAPIWSDL", 'https://secure.paygate.co.za/payhost/process.trans?wsdl' );
 define( "PAYBATCHAPI", 'https://secure.paygate.co.za/paybatch/1.2/process.trans' );
 define( "PAYBATCHAPIWSDL", 'https://secure.paygate.co.za/paybatch/1.2/PayBatch.wsdl' );
 define( "PAYGATETESTID", '10011072130' );
