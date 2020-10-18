@@ -186,16 +186,44 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
             }
         }
 
-        $command = 'AddInvoicePayment';
+        // Get the current invoice and check its status
+        $command = 'GetInvoice';
         $data    = [
             'invoiceid' => $reference,
-            'transid'   => $transactionId,
-            'gateway'   => $gatewayModuleName,
         ];
-        $result = localAPI( $command, $data );
-        logTransaction( $gatewayModuleName, $response, 'success' );
-        logActivity( 'Payment successful: ' . $payRequestId . '_' . $reference );
-        callback3DSecureRedirect( $reference, true );
+        $invoice = localApi( $command, $data );
+
+        // Get transactions for invoice
+        $command = 'GetTransactions';
+        $data    = [
+            'invoiceid' => $reference,
+        ];
+        $transactions = localAPI( $command, $data );
+
+        // Check for duplicate transaction
+        $duplicate = false;
+        foreach ( $transactions['transactions']['transaction'] as $transaction ) {
+            if ( $transactionId == $transaction['transid'] ) {
+                $duplicate = true;
+            }
+        }
+        if ( !$duplicate ) {
+            // Add invoice payment
+            $command = 'AddInvoicePayment';
+            $data    = [
+                'invoiceid' => $reference,
+                'transid'   => $transactionId,
+                'gateway'   => $gatewayModuleName,
+            ];
+            $result = localAPI( $command, $data );
+            logTransaction( $gatewayModuleName, $response, 'success' );
+            logActivity( 'Payment successful: ' . $payRequestId . '_' . $reference );
+            callback3DSecureRedirect( $reference, true );
+        } else {
+            logActivity( 'Duplicate transaction: ' . $payRequestId . '_' . $transactionId . '_' . $reference );
+            callback3DSecureRedirect( $reference, false );
+
+        }
     } else {
         // Failed
         logTransaction( $gatewayModuleName, null, 'failed' );

@@ -82,8 +82,9 @@ function handleLineItem( $transResult )
 
     $dataApi = [
         'invoiceid'     => $transResult['txRef'],
-        'paymentmethod' => GATEWAY,
+        'paymentmethod' => 'payhostpaybatch',
         'status'        => 'Paid',
+        'txId'          => $transResult['txId'],
     ];
     $response = updateInvoicesApi( $dataApi );
     echo $response;
@@ -109,6 +110,11 @@ function doPayBatchQuery( $uploadId )
 
 function updateInvoicesApi( $data )
 {
+    addInvoicePayment( $data );
+}
+
+function markInvoicesPaid( $data )
+{
     global $api_identifier, $api_secret, $api_url, $api_access_key;
     $postFields = [
         'username'     => $api_identifier,
@@ -132,5 +138,65 @@ function updateInvoicesApi( $data )
         return $response;
     } else {
         return $error;
+    }
+}
+
+function addInvoicePayment( $data )
+{
+    global $api_identifier, $api_secret, $api_url, $api_access_key;
+
+    // Check for duplicate transactions in invoice
+    $postFields = [
+        'username'     => $api_identifier,
+        'password'     => $api_secret,
+        'action'       => 'GetTransactions',
+        'gateway'      => $data['paymentmethod'],
+        'responsetype' => 'json',
+        'accesskey'    => $api_access_key,
+        'invoiceid'    => $data['invoiceid'],
+    ];
+
+    $ch = curl_init();
+    curl_setopt( $ch, CURLOPT_URL, $api_url );
+    curl_setopt( $ch, CURLOPT_POST, 1 );
+    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
+    curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query( $postFields ) );
+    $response = curl_exec( $ch );
+    curl_close( $ch );
+
+    $isDuplicate  = false;
+    $transactions = json_decode( $response )->transactions->transaction;
+    foreach ( $transactions as $transaction ) {
+        if ( $data['txId'] == $transaction->transid ) {
+            $isDuplicate = true;
+        }
+    }
+
+    if ( !$isDuplicate ) {
+        $postFields = [
+            'username'     => $api_identifier,
+            'password'     => $api_secret,
+            'action'       => 'AddInvoicePayment',
+            'gateway'      => $data['paymentmethod'],
+            'responsetype' => 'json',
+            'transid'      => $data['txId'],
+            'accesskey'    => $api_access_key,
+            'invoiceid'    => $data['invoiceid'],
+        ];
+
+        $ch = curl_init();
+        curl_setopt( $ch, CURLOPT_URL, $api_url );
+        curl_setopt( $ch, CURLOPT_POST, 1 );
+        curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
+        curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query( $postFields ) );
+        $response = curl_exec( $ch );
+        $error    = curl_error( $ch );
+        curl_close( $ch );
+
+        if ( $error == '' ) {
+            return $response;
+        } else {
+            return $error;
+        }
     }
 }

@@ -14,3 +14,5 @@ Date	  : Version: Description
 2020-06-16: v1.0.5 : Use database rather than session for order information.
                      Standalone crons capability.
                      Consolidated bug fixes.
+2020-10-18: v1.0.6 : Added check for already paid invoice.
+                     Update WSDL url to correct syntax.
