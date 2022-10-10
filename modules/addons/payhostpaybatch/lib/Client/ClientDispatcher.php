@@ -23,9 +23,9 @@ class ClientDispatcher
      *
      * @return array
      */
-    public function dispatch( $action, $parameters )
+    public function dispatch($action, $parameters)
     {
-        if ( !$action ) {
+        if ( ! $action) {
             // Default to secret if no action specified
             $action = 'secret';
         }
@@ -33,8 +33,8 @@ class ClientDispatcher
         $controller = new Controller();
 
         // Verify requested action is valid and callable
-        if ( is_callable( array( $controller, $action ) ) ) {
-            return $controller->$action( $parameters );
+        if (is_callable(array($controller, $action))) {
+            return $controller->$action($parameters);
         }
     }
 }

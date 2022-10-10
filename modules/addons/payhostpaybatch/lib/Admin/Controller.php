@@ -6,6 +6,7 @@
  *
  * Released under the GNU General Public License
  */
+
 namespace WHMCS\Module\Addon\PayhostPaybatch\Admin;
 
 /**
@@ -21,7 +22,7 @@ class Controller
      *
      * @return string
      */
-    public function index( $vars )
+    public function index($vars)
     {
         // Get common module parameters
         $modulelink = $vars['modulelink']; // eg. addonmodules.php?module=addonmodule
@@ -76,7 +77,7 @@ EOF;
      *
      * @return string
      */
-    public function show( $vars )
+    public function show($vars)
     {
         // Get common module parameters
         $modulelink = $vars['modulelink']; // eg. addonmodules.php?module=addonmodule

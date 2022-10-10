@@ -49,19 +49,19 @@ class paybatchsoap
 
     protected $batchReference = 'PayBatch_';
 
-    public function __construct( $notifyUrl )
+    public function __construct($notifyUrl)
     {
-        $this->batchReference = date( 'Y-m-d' ) . '_' . uniqid();
+        $this->batchReference = date('Y-m-d') . '_' . uniqid();
         $this::$notifyUrl     = $notifyUrl;
     }
 
     /**
      * @param $data array of batchline type
      */
-    public function setBatchData( $data )
+    public function setBatchData($data)
     {
         $this->batchData = [];
-        foreach ( $data as $line ) {
+        foreach ($data as $line) {
             $this->batchData[] = $line;
         }
     }
@@ -69,81 +69,83 @@ class paybatchsoap
     /**
      * @param $data input data array
      */
-    public function getAuthRequest( $data )
+    public function getAuthRequest($data)
     {
-        $this->batchReference = date( 'Y-m-d' ) . '_' . uniqid();
-        $this->setBatchData( $data );
+        $this->batchReference = date('Y-m-d') . '_' . uniqid();
+        $this->setBatchData($data);
         try {
             // Use SimpleXMLElement to build structure
-            $xml = new SimpleXMLElement( '<Auth />' );
-            $xml->addChild( 'BatchReference', $this->batchReference );
-            $xml->addChild( 'NotificationUrl', $this::$notifyUrl );
+            $xml = new SimpleXMLElement('<Auth />');
+            $xml->addChild('BatchReference', $this->batchReference);
+            $xml->addChild('NotificationUrl', $this::$notifyUrl);
 
-            $batchData = $xml->addChild( 'BatchData' );
-            foreach ( $this->batchData as $line ) {
+            $batchData = $xml->addChild('BatchData');
+            foreach ($this->batchData as $line) {
                 $batchLine = '';
-                foreach ( $line as $item ) {
+                foreach ($line as $item) {
                     $batchLine .= $item . ',';
                 }
-                $batchLine = rtrim( $batchLine, ',' );
-                $batchData->addChild( 'BatchLine', $batchLine );
+                $batchLine = rtrim($batchLine, ',');
+                $batchData->addChild('BatchLine', $batchLine);
             }
 
             // Remove XML headers
             $dom = new DOMDocument();
-            $dom->loadXML( $xml->asXML() );
+            $dom->loadXML($xml->asXML());
 
-            $soap = $dom->saveXML( $dom->documentElement );
+            $soap = $dom->saveXML($dom->documentElement);
 
             // Remove Auth tag - added in __soapCall
-            $childrenOnly = str_replace( ['<Auth>', '</Auth>'], '', $soap );
+            $childrenOnly = str_replace(['<Auth>', '</Auth>'], '', $soap);
 
             return $childrenOnly;
-        } catch ( Exception $e ) {
+        } catch (Exception $e) {
             return $e->getMessage();
         }
     }
 
-    public function getConfirmRequest( $uploadId )
+    public function getConfirmRequest($uploadId)
     {
         try {
             // Use SimpleXmlElement for better control of children
-            $xml = new SimpleXMLElement( '<Query />' );
+            $xml = new SimpleXMLElement('<Query />');
 
-            $xml->addChild( 'UploadID', $uploadId );
+            $xml->addChild('UploadID', $uploadId);
 
             // Use DomDocument to remove XML headers
             $dom = new DOMDocument();
-            $dom->loadXML( $xml->asXML() );
+            $dom->loadXML($xml->asXML());
 
-            $soap = $dom->saveXML( $dom->documentElement );
+            $soap = $dom->saveXML($dom->documentElement);
 
             // Remove Confirm tag because we pass it in the __soapCall
-            $childrenOnly = str_replace( ['<Query>', '</Query>'], '', $soap );
+            $childrenOnly = str_replace(['<Query>', '</Query>'], '', $soap);
+
             return $childrenOnly;
-        } catch ( Exception $e ) {
+        } catch (Exception $e) {
             return $e->getMessage();
         }
     }
 
-    public function getQueryRequest( $uploadId )
+    public function getQueryRequest($uploadId)
     {
         try {
             // Use SimpleXmlElement for better control of children
-            $xml = new SimpleXMLElement( '<Query />' );
+            $xml = new SimpleXMLElement('<Query />');
 
-            $xml->addChild( 'UploadID', $uploadId );
+            $xml->addChild('UploadID', $uploadId);
 
             // Use DomDocument to remove XML headers
             $dom = new DOMDocument();
-            $dom->loadXML( $xml->asXML() );
+            $dom->loadXML($xml->asXML());
 
-            $soap = $dom->saveXML( $dom->documentElement );
+            $soap = $dom->saveXML($dom->documentElement);
 
             // Remove Confirm tag because we pass it in the __soapCall
-            $childrenOnly = str_replace( ['<Query>', '</Query>'], '', $soap );
+            $childrenOnly = str_replace(['<Query>', '</Query>'], '', $soap);
+
             return $childrenOnly;
-        } catch ( Exception $e ) {
+        } catch (Exception $e) {
             return $e->getMessage();
         }
     }

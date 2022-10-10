@@ -16,20 +16,20 @@ require_once __DIR__ . '/../../../includes/gatewayfunctions.php';
 require_once __DIR__ . '/../../../includes/invoicefunctions.php';
 require_once '../payhostpaybatch/lib/constants.php';
 
-if ( !defined( "WHMCS" ) ) {
-    die( "This file cannot be accessed directly" );
+if ( ! defined("WHMCS")) {
+    die("This file cannot be accessed directly");
 }
 
 use WHMCS\Database\Capsule;
 
-if ( !defined( '_DB_PREFIX_' ) ) {
-    define( '_DB_PREFIX_', 'tbl' );
+if ( ! defined('_DB_PREFIX_')) {
+    define('_DB_PREFIX_', 'tbl');
 }
 
 /**
  * Check for existence of payhostpaybatch table and create if not
  */
-if ( !function_exists( 'createPayhostpaybatchTable' ) ) {
+if ( ! function_exists('createPayhostpaybatchTable')) {
     function createPayhostpaybatchTable()
     {
         $query = "create table if not exists `" . _DB_PREFIX_ . "payhostpaybatch` (";
@@ -39,7 +39,7 @@ if ( !function_exists( 'createPayhostpaybatchTable' ) ) {
         $query .= " recordval VARCHAR(50) NOT NULL, ";
         $query .= " dbid VARCHAR(10) NOT NULL DEFAULT '1')";
 
-        return full_query( $query );
+        return full_query($query);
     }
 }
 
@@ -49,20 +49,14 @@ createPayhostpaybatchTable();
  * @param $pgid
  * @param $key
  * @param $reqid
+ *
  * @return array ['token' => $token, 'reference' => $reference, 'transactionId' => $transactionId]
  * @throws SoapFault
  *
  * PayHost Query Request to retrieve card token from authorised vault transaction
  */
-function getQuery( $pgid, $key, $reqid )
+function getQuery($pgid, $key, $reqid)
 {
-    $userId             = $_SESSION['uid'];
-    $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-    $token              = Capsule::table( $tblpayhostpaybatch )
-        ->where( 'recordtype', 'clientdetail' )
-        ->where( 'recordid', $userId )
-        ->value( 'recordval' );
-
     $soap = <<<SOAP
             <ns1:SingleFollowUpRequest>
                 <ns1:QueryRequest>
@@ -75,46 +69,60 @@ function getQuery( $pgid, $key, $reqid )
             </ns1:SingleFollowUpRequest>
 SOAP;
     $wsdl = PAYHOSTAPIWSDL;
-    $sc   = new SoapClient( $wsdl, ['trace' => 1] );
+    $sc   = new SoapClient($wsdl, ['trace' => 1]);
     try {
-        $result = $sc->__soapCall( 'SingleFollowUp', [
-            new SoapVar( $soap, XSD_ANYXML ),
-        ] );
+        $result = $sc->__soapCall(
+            'SingleFollowUp',
+            [
+                new SoapVar($soap, XSD_ANYXML),
+            ]
+        );
 
-        if ( $result ) {
+        if ($result) {
             $vaultId       = $result->QueryResponse->Status->VaultId;
             $reference     = $result->QueryResponse->Status->Reference;
             $transactionId = $result->QueryResponse->Status->TransactionId;
+            $data1         = $result->QueryResponse->Status->PayVaultData[0]->value;
+            $data2         = $result->QueryResponse->Status->PayVaultData[1]->value;
+            $userId        = $result->QueryResponse->UserDefinedFields->value;
         } else {
             $vaultId = null;
         }
-    } catch ( SoapFault $f ) {
+    } catch (SoapFault $f) {
         $vaultId = null;
     }
 
-    if ( $token == null || $token == '' ) {
-        $token = $vaultId;
-    }
-    return ['token' => $token, 'reference' => $reference, 'transactionId' => $transactionId];
+
+    $token = $vaultId;
+
+
+    return [
+        'token'         => $token,
+        'reference'     => $reference,
+        'transactionId' => $transactionId,
+        'vaultData1'    => $data1,
+        'vaultData2'    => $data2,
+        'userId'        => $userId,
+    ];
 }
 
 // Get current user
-$userId = intval( $_SESSION['uid'] );
+$userId = intval($_SESSION['uid']);
 
 // Detect module name from filename
-$gatewayModuleName = basename( __FILE__, '.php' );
+$gatewayModuleName = basename(__FILE__, '.php');
 
 // Fetch gateway configuration parameters
-$gatewayParams = getGatewayVariables( $gatewayModuleName );
+$gatewayParams = getGatewayVariables($gatewayModuleName);
 
 // Die if module is not active.
-if ( !$gatewayParams['type'] ) {
-    die( "Module Not Activated" );
+if ( ! $gatewayParams['type']) {
+    die("Module Not Activated");
 }
 
 // Check if we are in test mode
 $testMode = $gatewayParams['testMode'];
-if ( $testMode == 'on' ) {
+if ($testMode == 'on') {
     $payHostId         = PAYGATETESTID;
     $payBatchId        = PAYGATETESTID;
     $payHostSecretKey  = PAYGATETESTKEY;
@@ -129,60 +137,73 @@ if ( $testMode == 'on' ) {
 // Retrieve data returned in payment gateway callback
 // We need to distinguish between a return from PayHost and a return from PayBatch
 
-if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) ) {
+if (isset($_POST['PAY_REQUEST_ID']) && isset($_POST['TRANSACTION_STATUS'])) {
     // PayHost postback
-    $payRequestId       = filter_var( $_POST['PAY_REQUEST_ID'] );
-    $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-    $reference          = Capsule::table( $tblpayhostpaybatch )
-        ->where( 'recordtype', 'transactionrecord' )
-        ->where( 'recordid', $payRequestId )
-        ->value( 'recordval' );
 
-    $status   = filter_var( $_POST['TRANSACTION_STATUS'], FILTER_SANITIZE_STRING );
+    logActivity('Postback: ' . json_encode($_POST));
+    logTransaction($gatewayModuleName, null, 'Postback: ' . json_encode($_POST));
+    $payRequestId             = filter_var($_POST['PAY_REQUEST_ID']);
+    $tblpayhostpaybatch       = _DB_PREFIX_ . 'payhostpaybatch';
+    $tblpayhostpaybatchvaults = _DB_PREFIX_ . 'payhostpaybatchvaults';
+    $reference                = Capsule::table($tblpayhostpaybatch)
+                                       ->where('recordtype', 'transactionrecord')
+                                       ->where('recordid', $payRequestId)
+                                       ->value('recordval');
+
+    logactivity('Reference: ' . $reference);
+    logTransaction($gatewayModuleName, null, 'Reference: ' . $reference);
+
+    $status   = filter_var($_POST['TRANSACTION_STATUS'], FILTER_SANITIZE_STRING);
     $verified = false;
 
     // Verify transaction key
     $checkString = $payHostId . $payRequestId . $status . $reference . $payHostSecretKey;
-    $check       = md5( $checkString );
-    $verified    = hash_equals( $check, $_POST['CHECKSUM'] );
-    if ( !$verified ) {
+    $check       = md5($checkString);
+    $verified    = hash_equals($check, $_POST['CHECKSUM']);
+    if ( ! $verified) {
         // Validity not verified
         // Failed
-        logActivity( 'Validity not verified: ' . $payRequestId . '_' . $reference );
-        callback3DSecureRedirect( $reference, false );
+        logActivity('Validity not verified: ' . $payRequestId . '_' . $reference);
+        callback3DSecureRedirect($reference, false);
     }
 
     // Make a request to get the Vault Id
-    if ( $verified && $status == 1 ) {
-        $response      = getQuery( $payHostId, $payHostSecretKey, $payRequestId );
+    if ($verified && $status == 1) {
+        $response      = getQuery($payHostId, $payHostSecretKey, $payRequestId);
         $transactionId = $response['transactionId'];
+        $card_number   = $response['vaultData1'];
+        $card_expiry   = $response['vaultData2'];
+        $userId        = $response['userId'];
 
         // Check for token and valid format
         $vaultPattern = '/^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$/';
-        $token        = !empty( $response['token'] ) ? $response['token'] : null;
-        if ( preg_match( $vaultPattern, $token ) != 1 ) {
+        $token        = ! empty($response['token']) ? $response['token'] : null;
+        if (preg_match($vaultPattern, $token) != 1) {
             $token = null;
         }
 
         // Store the token if valid
-        if ( $token ) {
-            $clientExists = Capsule::table( $tblpayhostpaybatch )
-                ->where( 'recordtype', 'clientdetail' )
-                ->where( 'recordid', $userId )
-                ->value( 'recordval' );
+        if ($token) {
+            $clientExists = Capsule::table($tblpayhostpaybatchvaults)
+                                   ->where('token', $token)
+                                   ->where('user_id', $userId)
+                                   ->value('token');
 
-            if ( strlen( $clientExists ) > 0 ) {
-                Capsule::table( $tblpayhostpaybatch )
-                    ->where( 'recordtype', 'clientdetail' )
-                    ->where( 'recordid', $userId )
-                    ->update( ['recordval' => $token] );
+            if (strlen($clientExists) > 0) {
+                Capsule::table($tblpayhostpaybatchvaults)
+                       ->where('token', $token)
+                       ->where('user_id', $userId)
+                       ->update(['card_number' => $card_number, 'card_expiry' => $card_expiry]);
             } else {
-                Capsule::table( $tblpayhostpaybatch )
-                    ->insert( [
-                        'recordtype' => 'clientdetail',
-                        'recordid'   => $userId,
-                        'recordval'  => $token,
-                    ] );
+                Capsule::table($tblpayhostpaybatchvaults)
+                       ->insert(
+                           [
+                               'user_id'     => $userId,
+                               'token'       => $token,
+                               'card_number' => $card_number,
+                               'card_expiry' => $card_expiry,
+                           ]
+                       );
             }
         }
 
@@ -191,23 +212,24 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
         $data    = [
             'invoiceid' => $reference,
         ];
-        $invoice = localApi( $command, $data );
+        $invoice = localApi($command, $data);
 
         // Get transactions for invoice
-        $command = 'GetTransactions';
-        $data    = [
+        $command      = 'GetTransactions';
+        $data         = [
             'invoiceid' => $reference,
         ];
-        $transactions = localAPI( $command, $data );
+        $transactions = localAPI($command, $data);
 
         // Check for duplicate transaction
         $duplicate = false;
-        foreach ( $transactions['transactions']['transaction'] as $transaction ) {
-            if ( $transactionId == $transaction['transid'] ) {
+        foreach ($transactions['transactions']['transaction'] as $transaction) {
+            if ($transactionId == $transaction['transid']) {
                 $duplicate = true;
+                break;
             }
         }
-        if ( !$duplicate ) {
+        if ( ! $duplicate) {
             // Add invoice payment
             $command = 'AddInvoicePayment';
             $data    = [
@@ -215,19 +237,23 @@ if ( isset( $_POST['PAY_REQUEST_ID'] ) && isset( $_POST['TRANSACTION_STATUS'] ) 
                 'transid'   => $transactionId,
                 'gateway'   => $gatewayModuleName,
             ];
-            $result = localAPI( $command, $data );
-            logTransaction( $gatewayModuleName, $response, 'success' );
-            logActivity( 'Payment successful: ' . $payRequestId . '_' . $reference );
-            callback3DSecureRedirect( $reference, true );
+            $result  = localAPI($command, $data);
+            logTransaction($gatewayModuleName, $response, 'success');
+            logActivity('Payment successful: ' . $payRequestId . '_' . $reference);
+            callback3DSecureRedirect($reference, true);
         } else {
-            logActivity( 'Duplicate transaction: ' . $payRequestId . '_' . $transactionId . '_' . $reference );
-            callback3DSecureRedirect( $reference, false );
-
+            logActivity('Duplicate transaction: ' . $payRequestId . '_' . $transactionId . '_' . $reference);
+            logTransaction(
+                $gatewayModuleName,
+                'Duplicate transaction: ' . $payRequestId . '_' . $transactionId . '_' . $reference,
+                'duplicate'
+            );
+            callback3DSecureRedirect($reference, false);
         }
     } else {
         // Failed
-        logTransaction( $gatewayModuleName, null, 'failed' );
-        logActivity( 'Payment failed: ' . $payRequestId . '_' . $reference );
-        callback3DSecureRedirect( $reference, false );
+        logTransaction($gatewayModuleName, null, 'failed');
+        logActivity('Payment failed: ' . $payRequestId . '_' . $reference);
+        callback3DSecureRedirect($reference, false);
     }
 }

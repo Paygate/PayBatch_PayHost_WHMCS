@@ -24,21 +24,21 @@ use WHMCS\View\Menu\Item as MenuItem;
  *
  * add_hook(string $hookPointName, int $priority, string|array|Closure $function)
  */
-add_hook( 'ClientAreaHomepage', 1, function ( array $params ) {
+add_hook('ClientAreaHomepage', 1, function (array $params) {
     try {
         // Call the service's function, using the values provided by WHMCS in
         // `$params`.
-    } catch ( Exception $e ) {
+    } catch (Exception $e) {
         // Consider logging or reporting the error.
     }
-} );
+});
 
-add_hook( 'ClientAreaPrimaryNavbar', 1, function ( MenuItem $primaryNavbar ) {
-    $primaryNavbar->addChild( 'Token Management' )
-        ->setOrder( 70 );
-    $primaryNavbar->getChild( 'Token Management' )
-        ->addChild( 'RemoveToken', [
-            'uri'   => 'index.php?m=payhostpaybatch&action=secret',
-            'order' => 100,
-        ] );
-} );
+add_hook('ClientAreaPrimaryNavbar', 1, function (MenuItem $primaryNavbar) {
+    $primaryNavbar->addChild('Token Management')
+                  ->setOrder(70);
+    $primaryNavbar->getChild('Token Management')
+                  ->addChild('RemoveToken', [
+                      'uri'   => 'index.php?m=payhostpaybatch&action=secret',
+                      'order' => 100,
+                  ]);
+});
