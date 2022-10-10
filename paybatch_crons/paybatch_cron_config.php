@@ -28,4 +28,4 @@ $api_access_key = 'my_api_access_key';
 $api_url = 'https://www.myserver.com/includes/api.php';
 
 // Change this if default is not being used
-define( '_DB_PREFIX_', 'tbl' );
+define('_DB_PREFIX_', 'tbl');

@@ -20,13 +20,26 @@ class payhostsoap
      * @var string the url of the PayGate PayHost WSDL
      */
     public static $wsdl = PAYHOSTAPIWSDL;
+    public static $DEFAULT_PGID = '10011072130';
 
+    // Standard Inputs
+    public static $DEFAULT_AMOUNT = 3299;
+    public static $DEFAULT_CURRENCY = 'ZAR';
+    public static $DEFAULT_LOCALE = 'en-us';
+    public static $DEFAULT_ENCRYPTION_KEY = 'test';
+    public static $DEFAULT_TITLE = 'Mr';
+    public static $DEFAULT_FIRST_NAME = 'PayGate';
+    public static $DEFAULT_LAST_NAME = 'Test';
+    public static $DEFAULT_EMAIL = 'itsupport@paygate.co.za';
+    public static $DEFAULT_COUNTRY = 'ZAF';
+
+    // Customer Details
+    public static $DEFAULT_NOTIFY_URL = 'http://www.gatewaymanagementservices.com/ws/gotNotify.php';
+    public static $DEFAULT_PAY_METHOD = 'CC';
     /**
      * @var string default namespace. We add the namespace manually because of PHP's "quirks"
      */
     private static $ns = 'ns1';
-
-    // Standard Inputs
     protected $pgid;
     protected $reference;
     protected $amount;
@@ -34,55 +47,57 @@ class payhostsoap
     protected $transDate;
     protected $locale;
     protected $payMethod;
+
+    // Address Details
     protected $payMethodDetail;
     protected $encryptionKey;
-
-    // Customer Details
     protected $customerTitle;
     protected $firstName;
     protected $middleName;
     protected $lastName;
     protected $telephone;
+
+    // Address checkboxes
     protected $mobile;
     protected $fax;
     protected $email;
+
+    // Shipping Details
     protected $dateOfBirth;
     protected $socialSecurity;
-
-    // Address Details
     protected $addressLine1;
+
+    // Redirect Details
     protected $addressLine2;
     protected $addressLine3;
     protected $zip;
+
+    // Risk
     protected $city;
     protected $state;
+
+    // Airline
     protected $country;
-
-    // Address checkboxes
     protected $incCustomer = true;
-    protected $incBilling  = true;
+    protected $incBilling = true;
     protected $incShipping;
-
-    // Shipping Details
     protected $deliveryDate;
     protected $deliveryMethod;
     protected $installRequired;
-
-    // Redirect Details
     protected $retUrl;
     protected $notifyURL;
     protected $target;
-
-    // Risk
     protected $riskAccNum;
     protected $riskIpAddr;
-
-    // Airline
     protected $ticketNumber;
     protected $PNR;
     protected $travellerType;
     protected $departureAirport;
+
+    // Recurring orders
     protected $departureCountry;
+
+    // Vaulting allowed
     protected $departureCity;
     protected $departureDateTime;
     protected $arrivalAirport;
@@ -94,35 +109,17 @@ class payhostsoap
     protected $issuingCarrierCode;
     protected $issuingCarrierName;
     protected $flightNumber;
-
-    // Recurring orders
     protected $recurring;
-
-    // Vaulting allowed
     protected $vaulting;
     protected $vaultId;
 
-    public static $DEFAULT_PGID           = '10011072130';
-    public static $DEFAULT_AMOUNT         = 3299;
-    public static $DEFAULT_CURRENCY       = 'ZAR';
-    public static $DEFAULT_LOCALE         = 'en-us';
-    public static $DEFAULT_ENCRYPTION_KEY = 'test';
-    public static $DEFAULT_TITLE          = 'Mr';
-    public static $DEFAULT_FIRST_NAME     = 'PayGate';
-    public static $DEFAULT_LAST_NAME      = 'Test';
-    public static $DEFAULT_EMAIL          = 'itsupport@paygate.co.za';
-    public static $DEFAULT_COUNTRY        = 'ZAF';
-    public static $DEFAULT_NOTIFY_URL     = 'http://www.gatewaymanagementservices.com/ws/gotNotify.php';
-    public static $DEFAULT_PAY_METHOD     = 'CC';
-
     public function __construct()
     {
-
     }
 
-    public function setData( $data )
+    public function setData($data)
     {
-        foreach ( $data as $key => $value ) {
+        foreach ($data as $key => $value) {
             $k        = $key;
             $this->$k = $value;
         }
@@ -135,7 +132,7 @@ class payhostsoap
 <{$this::$ns}:WebPaymentRequest>
 {$this->getAccount()}
 {$this->getCustomer()}
-{$this->getVault( $this->vaulting,$this->vaultId )}
+{$this->getVault($this->vaulting, $this->vaultId)}
 {$this->getPaymentType()}
 {$this->getRedirect()}
 {$this->getOrder()}
@@ -145,24 +142,38 @@ class payhostsoap
 </{$this::$ns}:SinglePaymentRequest>
 XML;
 
-        $xml = preg_replace( "/(^[\r\n]*|[\r\n]+)[\s\t]*[\r\n]+/", "\n", $xml ); // Remove empty lines to make the plain text request prettier
+        $xml = preg_replace(
+            "/(^[\r\n]*|[\r\n]+)[\s\t]*[\r\n]+/",
+            "\n",
+            $xml
+        ); // Remove empty lines to make the plain text request prettier
 
         return $xml;
     }
 
-    private function getVault( $vaulting, $vaultId )
+    public function getSOAPData()
     {
-        if ( $vaulting !== true ) {
+        $data                                 = [];
+        $data['WebPaymentRequest']            = [];
+        $data['WebPaymentRequest']['Account'] = $this->getAccountData();
+
+        return $data;
+    }
+
+    private function getVault($vaulting, $vaultId)
+    {
+        if ($vaulting !== true) {
             return '';
         }
 
         $token = $vaultId;
-        if ( $token == null || $token == '' ) {
+        if ($token == null || $token == '') {
             // If token is not already stored under member then add element to request a vault transaction
             $vault = <<<VAULT
 <!-- Vault Detail -->
     <{$this::$ns}:Vault>true</{$this::$ns}:Vault>
 VAULT;
+
             return $vault;
         } else {
             // Return the Vault element with valid token
@@ -189,14 +200,13 @@ XML;
 
     private function getCustomer()
     {
-
-        $middleName     = ( $this->middleName != '' ? "<{$this::$ns}:MiddleName>{$this->middleName}</{$this::$ns}:MiddleName>" : '' );
-        $telephone      = ( $this->telephone != '' ? "<{$this::$ns}:Telephone>{$this->telephone}</{$this::$ns}:Telephone>" : '' );
-        $mobile         = ( $this->mobile != '' ? "<{$this::$ns}:Mobile>{$this->mobile}</{$this::$ns}:Mobile>" : '' );
-        $fax            = ( $this->fax != '' ? "<{$this::$ns}:Fax>{$this->fax}</{$this::$ns}:Fax>" : '' );
-        $dateOfBirth    = ( $this->dateOfBirth != '' ? "<{$this::$ns}:DateOfBirth>{$this->dateOfBirth}</{$this::$ns}:DateOfBirth>" : '' );
-        $socialSecurity = ( $this->socialSecurity != '' ? "<{$this::$ns}:SocialSecurityNumber>{$this->socialSecurity}</{$this::$ns}:SocialSecurityNumber>" : '' );
-        $address        = ( isset( $this->incCustomer ) ? $this->getAddress() : '' );
+        $middleName     = ($this->middleName != '' ? "<{$this::$ns}:MiddleName>{$this->middleName}</{$this::$ns}:MiddleName>" : '');
+        $telephone      = ($this->telephone != '' ? "<{$this::$ns}:Telephone>{$this->telephone}</{$this::$ns}:Telephone>" : '');
+        $mobile         = ($this->mobile != '' ? "<{$this::$ns}:Mobile>{$this->mobile}</{$this::$ns}:Mobile>" : '');
+        $fax            = ($this->fax != '' ? "<{$this::$ns}:Fax>{$this->fax}</{$this::$ns}:Fax>" : '');
+        $dateOfBirth    = ($this->dateOfBirth != '' ? "<{$this::$ns}:DateOfBirth>{$this->dateOfBirth}</{$this::$ns}:DateOfBirth>" : '');
+        $socialSecurity = ($this->socialSecurity != '' ? "<{$this::$ns}:SocialSecurityNumber>{$this->socialSecurity}</{$this::$ns}:SocialSecurityNumber>" : '');
+        $address        = (isset($this->incCustomer) ? $this->getAddress() : '');
 
         $customer = <<<XML
 <!-- Customer Details -->
@@ -220,14 +230,13 @@ XML;
 
     private function getAddress()
     {
-
-        $address1 = ( $this->addressLine1 != '' ? "<{$this::$ns}:AddressLine>{$this->addressLine1}</{$this::$ns}:AddressLine>" : '' );
-        $address2 = ( $this->addressLine2 != '' ? "<{$this::$ns}:AddressLine>{$this->addressLine2}</{$this::$ns}:AddressLine>" : '' );
-        $address3 = ( $this->addressLine3 != '' ? "<{$this::$ns}:AddressLine>{$this->addressLine3}</{$this::$ns}:AddressLine>" : '' );
-        $city     = ( $this->city != '' ? "<{$this::$ns}:City>{$this->city}</{$this::$ns}:City>" : '' );
-        $country  = ( $this->country != '' ? "<{$this::$ns}:Country>{$this->country}</{$this::$ns}:Country>" : 'ZAF' );
-        $state    = ( $this->state != '' ? "<{$this::$ns}:State>{$this->state}</{$this::$ns}:State>" : '' );
-        $zip      = ( $this->zip != '' ? "<{$this::$ns}:Zip>{$this->zip}</{$this::$ns}:Zip>" : '' );
+        $address1 = ($this->addressLine1 != '' ? "<{$this::$ns}:AddressLine>{$this->addressLine1}</{$this::$ns}:AddressLine>" : '');
+        $address2 = ($this->addressLine2 != '' ? "<{$this::$ns}:AddressLine>{$this->addressLine2}</{$this::$ns}:AddressLine>" : '');
+        $address3 = ($this->addressLine3 != '' ? "<{$this::$ns}:AddressLine>{$this->addressLine3}</{$this::$ns}:AddressLine>" : '');
+        $city     = ($this->city != '' ? "<{$this::$ns}:City>{$this->city}</{$this::$ns}:City>" : '');
+        $country  = ($this->country != '' ? "<{$this::$ns}:Country>{$this->country}</{$this::$ns}:Country>" : 'ZAF');
+        $state    = ($this->state != '' ? "<{$this::$ns}:State>{$this->state}</{$this::$ns}:State>" : '');
+        $zip      = ($this->zip != '' ? "<{$this::$ns}:Zip>{$this->zip}</{$this::$ns}:Zip>" : '');
 
         $address = <<<XML
 <!-- Address Details -->
@@ -249,9 +258,9 @@ XML;
     {
         $paymentType = '';
 
-        if ( $this->payMethod != '' || $this->payMethodDetail != '' ) {
-            $payMethod       = ( $this->payMethod != '' ? "<{$this::$ns}:Method>{$this->payMethod}</{$this::$ns}:Method>" : '' );
-            $payMethodDetail = ( $this->payMethodDetail != '' ? "<{$this::$ns}:Detail>{$this->payMethodDetail}</{$this::$ns}:Detail>" : '' );
+        if ($this->payMethod != '' || $this->payMethodDetail != '') {
+            $payMethod       = ($this->payMethod != '' ? "<{$this::$ns}:Method>{$this->payMethod}</{$this::$ns}:Method>" : '');
+            $payMethodDetail = ($this->payMethodDetail != '' ? "<{$this::$ns}:Detail>{$this->payMethodDetail}</{$this::$ns}:Detail>" : '');
 
             $paymentType = <<<XML
 <!-- Payment Type Details -->
@@ -267,7 +276,7 @@ XML;
 
     private function getRedirect()
     {
-        $target = ( isset( $this->target ) && $this->target != '' ? '<' . $this::$ns . ':Target>' . $this->target . '</' . $this::$ns . ':Target>' : '' );
+        $target = (isset($this->target) && $this->target != '' ? '<' . $this::$ns . ':Target>' . $this->target . '</' . $this::$ns . ':Target>' : '');
 
         $redirect = <<<XML
 <!-- Redirect Details -->
@@ -285,7 +294,7 @@ XML;
     {
         $billing = '';
 
-        if ( isset( $this->incBilling ) ) {
+        if (isset($this->incBilling)) {
             $billing = <<<XML
 <{$this::$ns}:BillingDetails>
 {$this->getCustomer()}
@@ -301,12 +310,11 @@ XML;
     {
         $shipping = '';
 
-        if ( isset( $this->incShipping ) || $this->deliveryDate != '' || $this->deliveryMethod != '' || isset( $this->installRequired ) ) {
-
-            $address         = ( isset( $this->incShipping ) ? $this->getAddress() : '' );
-            $deliveryDate    = ( $this->deliveryDate != '' ? "<{$this::$ns}:DeliveryDate>{$this->deliveryDate}</{$this::$ns}:DeliveryDate>" : '' );
-            $deliveryMethod  = ( $this->deliveryMethod != '' ? "<{$this::$ns}:DeliveryMethod>{$this->deliveryMethod}</{$this::$ns}:DeliveryMethod>" : '' );
-            $installRequired = ( $this->installRequired != '' ? "<{$this::$ns}:InstallationRequested>{$this->installRequired}</{$this::$ns}:InstallationRequested>" : '' );
+        if (isset($this->incShipping) || $this->deliveryDate != '' || $this->deliveryMethod != '' || isset($this->installRequired)) {
+            $address         = (isset($this->incShipping) ? $this->getAddress() : '');
+            $deliveryDate    = ($this->deliveryDate != '' ? "<{$this::$ns}:DeliveryDate>{$this->deliveryDate}</{$this::$ns}:DeliveryDate>" : '');
+            $deliveryMethod  = ($this->deliveryMethod != '' ? "<{$this::$ns}:DeliveryMethod>{$this->deliveryMethod}</{$this::$ns}:DeliveryMethod>" : '');
+            $installRequired = ($this->installRequired != '' ? "<{$this::$ns}:InstallationRequested>{$this->installRequired}</{$this::$ns}:InstallationRequested>" : '');
 
             $shipping = <<<XML
 <{$this::$ns}:ShippingDetails>
@@ -324,7 +332,6 @@ XML;
 
     private function getOrder()
     {
-
         $order = <<<XML
 <!-- Order Details -->
     <{$this::$ns}:Order>
@@ -346,7 +353,7 @@ XML;
     {
         $risk = '';
 
-        if ( $this->riskAccNum != '' && $this->riskIpAddr != '' ) {
+        if ($this->riskAccNum != '' && $this->riskIpAddr != '') {
             $risk = <<<XML
 <!-- Risk Details -->
 <{$this::$ns}:Risk>
@@ -361,18 +368,16 @@ XML;
 
     private function getUserFields()
     {
-
         $userDefined = '<!-- User Fields -->' . PHP_EOL;
         $i           = 1;
 
-        while ( $i >= 1 ) {
-            if ( isset( $this->{'userKey' . $i} ) && $this->{'userKey' . $i} != '' && isset( $this->{'userField' . $i} ) && $this->{'userField' . $i} != '' ) {
-
+        while ($i >= 1) {
+            if (isset($this->{'userKey' . $i}) && $this->{'userKey' . $i} != '' && isset($this->{'userField' . $i}) && $this->{'userField' . $i} != '') {
                 $key   = $this->{'userKey' . $i};
                 $value = $this->{'userField' . $i};
 
                 $userDefined
-                .= <<<XML
+                    .= <<<XML
     <{$this::$ns}:UserDefinedFields>
     <{$this::$ns}:key>{$key}</ns1:key>
     <{$this::$ns}:value>{$value}</ns1:value>
@@ -390,12 +395,12 @@ XML;
 
     private function getPassenger()
     {
-        $middleName     = ( $this->middleName != '' ? "<{$this::$ns}:MiddleName>{$this->middleName}</{$this::$ns}:MiddleName>" : '' );
-        $telephone      = ( $this->telephone != '' ? "<{$this::$ns}:Telephone>{$this->telephone}</{$this::$ns}:Telephone>" : '' );
-        $mobile         = ( $this->mobile != '' ? "<{$this::$ns}:Mobile>{$this->mobile}</{$this::$ns}:Mobile>" : '' );
-        $fax            = ( $this->fax != '' ? "<{$this::$ns}:Fax>{$this->fax}</{$this::$ns}:Fax>" : '' );
-        $dateOfBirth    = ( $this->dateOfBirth != '' ? "<{$this::$ns}:DateOfBirth>{$this->dateOfBirth}</{$this::$ns}:DateOfBirth>" : '' );
-        $socialSecurity = ( $this->socialSecurity != '' ? "<{$this::$ns}:SocialSecurityNumber>{$this->socialSecurity}</{$this::$ns}:SocialSecurityNumber>" : '' );
+        $middleName     = ($this->middleName != '' ? "<{$this::$ns}:MiddleName>{$this->middleName}</{$this::$ns}:MiddleName>" : '');
+        $telephone      = ($this->telephone != '' ? "<{$this::$ns}:Telephone>{$this->telephone}</{$this::$ns}:Telephone>" : '');
+        $mobile         = ($this->mobile != '' ? "<{$this::$ns}:Mobile>{$this->mobile}</{$this::$ns}:Mobile>" : '');
+        $fax            = ($this->fax != '' ? "<{$this::$ns}:Fax>{$this->fax}</{$this::$ns}:Fax>" : '');
+        $dateOfBirth    = ($this->dateOfBirth != '' ? "<{$this::$ns}:DateOfBirth>{$this->dateOfBirth}</{$this::$ns}:DateOfBirth>" : '');
+        $socialSecurity = ($this->socialSecurity != '' ? "<{$this::$ns}:SocialSecurityNumber>{$this->socialSecurity}</{$this::$ns}:SocialSecurityNumber>" : '');
 
         $passenger = <<<XML
 <{$this::$ns}:Passenger>
@@ -445,7 +450,7 @@ XML;
     {
         $airline = '';
 
-        if ( $this->PNR != '' ) {
+        if ($this->PNR != '') {
             $airline = <<<XML
 <{$this::$ns}:AirlineBookingDetails>
 <{$this::$ns}:TicketNumber>{$this->ticketNumber}</{$this::$ns}:TicketNumber>
@@ -462,19 +467,11 @@ XML;
         return $airline;
     }
 
-    public function getSOAPData()
-    {
-        $data                                 = [];
-        $data['WebPaymentRequest']            = [];
-        $data['WebPaymentRequest']['Account'] = $this->getAccountData();
-
-        return $data;
-    }
-
     private function getAccountData()
     {
         $PayGateId = $this->pgid;
         $Password  = $this->encryptionKey;
+
         return ['PayGateId' => $PayGateId, 'Password' => $Password];
     }
 }

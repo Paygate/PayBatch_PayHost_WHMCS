@@ -6,8 +6,12 @@
  *
  * Released under the GNU General Public License
  */
+
 namespace WHMCS\Module\Addon\PayhostPaybatch\Client;
 
+use SoapClient;
+use SoapFault;
+use SoapVar;
 use WHMCS\Database\Capsule;
 
 /**
@@ -23,9 +27,9 @@ class Controller
      *
      * @return array
      */
-    public function index( $vars )
+    public function index($vars)
     {
-        return ( new ClientDispatcher() )->dispatch( 'secret', [] );
+        return (new ClientDispatcher())->dispatch('secret', []);
     }
 
     /**
@@ -35,33 +39,26 @@ class Controller
      *
      * @return array
      */
-    public function secret( $vars )
+    public function secret($vars)
     {
-        if ( !defined( '_DB_PREFIX_' ) ) {
-            define( '_DB_PREFIX_', 'tbl' );
+        if ( ! defined('_DB_PREFIX_')) {
+            define('_DB_PREFIX_', 'tbl');
         }
 
         // Get the stored tokens for the logged-in user
-        $userId             = $_SESSION['uid'] ?? null;
-        $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-        $tokens             = Capsule::table( $tblpayhostpaybatch )
-            ->select( 'recordval' )
-            ->where( 'recordtype', 'clientdetail' )
-            ->where( 'recordid', $userId )
-            ->get();
-
-        $tokenValues = [];
-        foreach ( $tokens as $token ) {
-            array_push( $tokenValues, $token->recordval );
-        }
+        $userId                   = $_SESSION['uid'] ?? null;
+        $tblpayhostpaybatchvaults = _DB_PREFIX_ . 'payhostpaybatchvaults';
+        $tokens                   = Capsule::table($tblpayhostpaybatchvaults)
+                                           ->select()
+                                           ->where('user_id', $userId)
+                                           ->get();
 
         $cardDetails = [];
-        foreach ( $tokenValues as $tokenValue ) {
-            $cardDetail['token']      = $tokenValue;
-            $card                     = $this->getVaultCard( $tokenValue )->LookUpVaultResponse->Status->PayVaultData;
-            $cardDetail['cardNumber'] = $card[0]->value;
-            $cardDetail['expDate']    = $card[1]->value;
-            array_push( $cardDetails, $cardDetail );
+        foreach ($tokens as $tokenValue) {
+            $cardDetail['token']      = $tokenValue->token;
+            $cardDetail['cardNumber'] = $tokenValue->card_number;
+            $cardDetail['expDate']    = $tokenValue->card_expiry;
+            array_push($cardDetails, $cardDetail);
         }
 
         // Get common module parameters
@@ -78,7 +75,7 @@ class Controller
             'forcessl'     => false, // Deprecated as of Version 7.0. Requests will always use SSL if available.
             'vars'         => array(
                 'modulelink'      => $modulelink,
-                'configTextField' => json_encode( $cardDetails ),
+                'configTextField' => json_encode($cardDetails),
                 'customVariable'  => 'your own content goes here',
                 'userId'          => $userId,
                 'userTokens'      => $cardDetails,
@@ -86,11 +83,31 @@ class Controller
         );
     }
 
-    private function getVaultCard( $vaultId )
+    public function deleteToken($vars)
+    {
+        if ( ! defined('_DB_PREFIX_')) {
+            define('_DB_PREFIX_', 'tbl');
+        }
+
+        $tokenId = $_GET['tokenId'] ?? null;
+        if ($tokenId) {
+            $userId                   = $_SESSION['uid'] ?? null;
+            $tblpayhostpaybatchvaults = _DB_PREFIX_ . 'payhostpaybatchvaults';
+            Capsule::table($tblpayhostpaybatchvaults)
+                   ->where('user_id', $userId)
+                   ->where('token', $tokenId)
+                   ->delete();
+        }
+        $dispatcher = new ClientDispatcher();
+
+        return $dispatcher->dispatch('secret', []);
+    }
+
+    private function getVaultCard($vaultId)
     {
         $gatewaySettings = $this->getPayhostGatewayDetail();
         // Check for test mode
-        if ( $gatewaySettings['testMode'] == 'on' ) {
+        if ($gatewaySettings['testMode'] == 'on') {
             $payHostId        = '10011072130';
             $payHostSecretKey = 'test';
         } else {
@@ -111,14 +128,13 @@ class Controller
 SOAP;
 
         $wsdl = 'https://secure.paygate.co.za/payhost/process.trans?wsdl';
-        $sc   = new \SoapClient( $wsdl, ['trace' => 1] );
+        $sc   = new SoapClient($wsdl, ['trace' => 1]);
         try {
-            $result = $sc->__soapCall( 'SingleVault', [
-//            $result = $sc->__soapCall('SingleFollowUp', [
-                new \SoapVar( $soap, XSD_ANYXML ),
-            ] );
-        } catch ( \SoapFault $f ) {
-            return json_encode( $f );
+            $result = $sc->__soapCall('SingleVault', [
+                new SoapVar($soap, XSD_ANYXML),
+            ]);
+        } catch (SoapFault $f) {
+            return json_encode($f);
         }
 
         return $result;
@@ -126,39 +142,19 @@ SOAP;
 
     private function getPayhostGatewayDetail()
     {
-        if ( !defined( '_DB_PREFIX_' ) ) {
-            define( '_DB_PREFIX_', 'tbl' );
+        if ( ! defined('_DB_PREFIX_')) {
+            define('_DB_PREFIX_', 'tbl');
         }
         $tblpaymentgateways = _DB_PREFIX_ . 'paymentgateways';
-        $gatewayValues      = Capsule::table( $tblpaymentgateways )
-            ->select( 'setting', 'value' )
-            ->where( 'gateway', 'payhostpaybatch' )
-            ->get();
-        $gatewaySettings = [];
-        foreach ( $gatewayValues as $gatewayValue ) {
+        $gatewayValues      = Capsule::table($tblpaymentgateways)
+                                     ->select('setting', 'value')
+                                     ->where('gateway', 'payhostpaybatch')
+                                     ->get();
+        $gatewaySettings    = [];
+        foreach ($gatewayValues as $gatewayValue) {
             $gatewaySettings[$gatewayValue->setting] = $gatewayValue->value;
         }
+
         return $gatewaySettings;
-    }
-
-    public function deleteToken( $vars )
-    {
-        if ( !defined( '_DB_PREFIX_' ) ) {
-            define( '_DB_PREFIX_', 'tbl' );
-        }
-
-        $tokenId = $_GET['tokenId'] ?? null;
-        if ( $tokenId ) {
-            $userId             = $_SESSION['uid'] ?? null;
-            $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-            Capsule::table( $tblpayhostpaybatch )
-                ->where( 'recordtype', 'clientdetail' )
-                ->where( 'recordid', $userId )
-                ->where( 'recordval', $tokenId )
-                ->delete();
-
-        }
-        $dispatcher = new ClientDispatcher();
-        return $dispatcher->dispatch( 'secret', [] );
     }
 }

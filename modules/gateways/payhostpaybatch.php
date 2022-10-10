@@ -20,20 +20,20 @@ require_once __DIR__ . '/../../includes/invoicefunctions.php';
 require_once 'payhostpaybatch/lib/constants.php';
 require_once 'payhostpaybatch/lib/payhostsoap.class.php';
 
-if ( !defined( "WHMCS" ) ) {
-    die( "This file cannot be accessed directly" );
+if ( ! defined("WHMCS")) {
+    die("This file cannot be accessed directly");
 }
 
 use WHMCS\Database\Capsule;
 
-if ( !defined( '_DB_PREFIX_' ) ) {
-    define( '_DB_PREFIX_', 'tbl' );
+if ( ! defined('_DB_PREFIX_')) {
+    define('_DB_PREFIX_', 'tbl');
 }
 
 /**
  * Check for existence of payhostpaybatch table and create if not
  */
-if ( !function_exists( 'createPayhostpaybatchTable' ) ) {
+if ( ! function_exists('createPayhostpaybatchTable')) {
     function createPayhostpaybatchTable()
     {
         $query = "create table if not exists `" . _DB_PREFIX_ . "payhostpaybatch` (";
@@ -43,15 +43,33 @@ if ( !function_exists( 'createPayhostpaybatchTable' ) ) {
         $query .= " recordval VARCHAR(50) NOT NULL, ";
         $query .= " dbid VARCHAR(10) NOT NULL DEFAULT '1')";
 
-        return full_query( $query );
+        return full_query($query);
+    }
+}
+
+/**
+ * Check for existence of payhostpaybatchvaults table and create if not
+ */
+if ( ! function_exists('createPayhostpaybatchVaultTable')) {
+    function createPayhostpaybatchVaultTable()
+    {
+        $query = "create table if not exists `" . _DB_PREFIX_ . "payhostpaybatchvaults` (";
+        $query .= " id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY, ";
+        $query .= " user_id INT NOT NULL, ";
+        $query .= " token VARCHAR(50) NOT NULL, ";
+        $query .= " card_number VARCHAR(50) NOT NULL, ";
+        $query .= " card_expiry VARCHAR(10) NOT NULL)";
+
+        return full_query($query);
     }
 }
 
 createPayhostpaybatchTable();
+createPayhostpaybatchVaultTable();
 
-if ( isset( $_POST['INITIATE'] ) && $_POST['INITIATE'] == 'initiate' ) {
-    $params = json_decode( base64_decode( $_POST['jparams'] ), true );
-    payhostpaybatch_initiate( $params );
+if (isset($_POST['INITIATE']) && $_POST['INITIATE'] == 'initiate') {
+    $params = json_decode(base64_decode($_POST['jparams']), true);
+    payhostpaybatch_initiate($params);
 }
 
 /**
@@ -159,13 +177,50 @@ function payhostpaybatch_config()
  *
  * @return string
  */
-function payhostpaybatch_link( $params )
+function payhostpaybatch_link($params)
 {
-    $jparams = base64_encode( json_encode( $params ) );
-    $html    = <<<HTML
+    $jparams  = base64_encode(json_encode($params));
+    $vaulting = $params['payhostpaybatch_vaulting'] === 'on';
+
+    // Check for values of correct format stored in tblclients->cardnum : we will use this to store the card vault id
+    $vaultIds                 = [];
+    $tblpayhostpaybatchvaults = _DB_PREFIX_ . 'payhostpaybatchvaults';
+    if ($vaulting) {
+        $vaultIds     = [];
+        $vaults       = Capsule::table($tblpayhostpaybatchvaults)
+                               ->where('user_id', $params['clientdetails']['userid'])
+                               ->select()
+                               ->get();
+        $vaultPattern = '/^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$/';
+        foreach ($vaults as $vault) {
+            if (preg_match($vaultPattern, $vault->token) == 1) {
+                $vaultIds[] = $vault;
+            }
+        }
+    }
+
+    if ($vaulting) {
+        $html = '<h4>Choose a card option</h4>';
+    }
+
+    $html .= <<<HTML
     <form method="post" action="modules/gateways/payhostpaybatch.php">
     <input type="hidden" name="INITIATE" value="initiate">
-    <input type="hidden" name="jparams" value="$jparams">
+    <input type="hidden" name="jparams" value="$jparams">   
+HTML;
+    if ($vaulting) {
+        $html .= '<select name="card-token">';
+        foreach ($vaultIds as $vault_id) {
+            $html .= "<option value='$vault_id->id'>Use card $vault_id->card_number</option>";
+        }
+        $html .= <<<HTML
+<option value="no-save">Use a new card and don't save it</option>
+    <option value="new-save">Use a new card and save it</option>
+</select>
+HTML;
+    }
+
+    $html .= <<<HTML
     <input type="submit" value="Pay using PayHost">
 </form>
 HTML;
@@ -180,11 +235,11 @@ HTML;
  *
  * @return string
  */
-function payhostpaybatch_initiate( $params )
+function payhostpaybatch_initiate($params)
 {
     // Check if test mode or not
     $testMode = $params['testMode'];
-    if ( $testMode == 'on' ) {
+    if ($testMode == 'on') {
         $payHostId        = PAYGATETESTID;
         $payHostSecretKey = PAYGATETESTKEY;
     } else {
@@ -192,15 +247,22 @@ function payhostpaybatch_initiate( $params )
         $payHostSecretKey = $params['payHostSecretKey'];
     }
 
-    $gatewayModuleName = basename( __FILE__, '.php' );
+    $user_id = $params['clientdetails']['id'];
+
+    $handle_card = filter_var($_POST['card-token'], FILTER_SANITIZE_STRING);
+
+    $gatewayModuleName = basename(__FILE__, '.php');
     $html              = '';
 
     // Check if recurring payments and vaulting are allowed - if not, do not enable PayBatch
-    $recurring = $params['payhostpaybatch_recurring'];
-    $vaulting  = $params['payhostpaybatch_vaulting'];
-    if ( $vaulting == 'on' ) {
-        $vaulting = true;
+    $vaulting = $params['payhostpaybatch_vaulting'] === 'on';
+    if ($handle_card === 'no-save') {
+        $vaulting = false;
     }
+    if ((int)$handle_card > 0) {
+        $vault_id = $handle_card;
+    }
+
     $usePayBatch = false;
 
     // System Parameters
@@ -217,7 +279,7 @@ function payhostpaybatch_initiate( $params )
     $returnUrl = $systemUrl . 'modules/gateways/callback/payhostpaybatch.php';
 
     // Transaction date
-    $transactionDate = date( 'Y-m-d\TH:i:s' );
+    $transactionDate = date('Y-m-d\TH:i:s');
 
     // Client Parameters
     $firstname = $params['clientdetails']['firstname'];
@@ -237,15 +299,18 @@ function payhostpaybatch_initiate( $params )
     $amount       = $params['amount'];
     $currencyCode = $params['currency'];
 
-    // Check for a value of correct format stored in tblclients->cardnum : we will use this to store the card vault id
+    // Get vault id from database
     $tblpayhostpaybatch = _DB_PREFIX_ . 'payhostpaybatch';
-    $vaultId            = Capsule::table( $tblpayhostpaybatch )
-        ->where( 'recordtype', 'clientdetail' )
-        ->where( 'recordid', $params['clientdetails']['userid'] )
-        ->value( 'recordval' );
-    $vaultPattern = '/^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$/';
-    if ( preg_match( $vaultPattern, $vaultId ) != 1 ) {
-        $vaultId = '';
+    if ($vaulting) {
+        $tblpayhostpaybatchvaults = _DB_PREFIX_ . 'payhostpaybatchvaults';
+        $vaultId                  = Capsule::table($tblpayhostpaybatchvaults)
+                                           ->where('user_id', $params['clientdetails']['userid'])
+                                           ->where('id', $vault_id)
+                                           ->value('token');
+        $vaultPattern             = '/^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$/';
+        if (preg_match($vaultPattern, $vaultId) != 1) {
+            $vaultId = '';
+        }
     }
 
     // A web payment request - use PayHost WebPayment request for redirect
@@ -257,56 +322,63 @@ function payhostpaybatch_initiate( $params )
     $data['pgid']          = $payHostId;
     $data['encryptionKey'] = $payHostSecretKey;
     $data['reference']     = $invoiceId;
-    $data['amount']        = intval( $amount * 100 );
+    $data['amount']        = intval($amount * 100);
     $data['currency']      = $currencyCode;
     $data['transDate']     = $transactionDate;
     $data['locale']        = 'en-us';
     $data['firstName']     = $firstname;
     $data['lastName']      = $lastname;
     $data['email']         = $email;
-    $data['customerTitle'] = isset( $data['customerTitle'] ) ? $data['customerTitle'] : 'Mr';
+    $data['customerTitle'] = isset($data['customerTitle']) ? $data['customerTitle'] : 'Mr';
     $data['country']       = 'ZAF';
     $data['retUrl']        = $returnUrl;
     $data['notifyURL']     = $notifyUrl;
     $data['recurring']     = $usePayBatch;
-    if ( $vaulting ) {
+    $data['userKey1']      = 'user_id';
+    $data['userField1']    = $user_id;
+    if ($vaulting) {
         $data['vaulting'] = true;
     }
-    if ( $vaultId != '' && $vaulting ) {
+    if ($vaultId != '' && $vaulting) {
         $data['vaultId'] = $vaultId;
     }
 
-    $payhostSoap->setData( $data );
+    $payhostSoap->setData($data);
 
     $xml = $payhostSoap->getSOAP();
 
     // Use PHP SoapClient to handle request
-    ini_set( 'soap.wsdl_cache', 0 );
-    $soapClient = new SoapClient( PAYHOSTAPIWSDL, ['trace' => 1] );
+    ini_set('soap.wsdl_cache', 0);
+    $soapClient = new SoapClient(PAYHOSTAPIWSDL, ['trace' => 1]);
 
     try {
-        $result = $soapClient->__soapCall( 'SinglePayment', [
-            new SoapVar( $xml, XSD_ANYXML ),
-        ] );
+        $result = $soapClient->__soapCall(
+            'SinglePayment',
+            [
+                new SoapVar($xml, XSD_ANYXML),
+            ]
+        );
 
-        if ( array_key_exists( 'Redirect', $result->WebPaymentResponse ) ) {
+        if (array_key_exists('Redirect', $result->WebPaymentResponse)) {
             // Redirect to Payment Portal
             // Store key values for return response
 
-            Capsule::table( $tblpayhostpaybatch )
-                ->insert( [
-                    'recordtype' => 'transactionrecord',
-                    'recordid'   => $result->WebPaymentResponse->Redirect->UrlParams[1]->value,
-                    'recordval'  => $result->WebPaymentResponse->Redirect->UrlParams[2]->value,
-                    'dbid'       => time(),
-                ] );
+            Capsule::table($tblpayhostpaybatch)
+                   ->insert(
+                       [
+                           'recordtype' => 'transactionrecord',
+                           'recordid'   => $result->WebPaymentResponse->Redirect->UrlParams[1]->value,
+                           'recordval'  => $result->WebPaymentResponse->Redirect->UrlParams[2]->value,
+                           'dbid'       => time(),
+                       ]
+                   );
 
             // Delete records which are older than 24 hours
             $expiryTime = time() - 24 * 3600;
-            Capsule::table( $tblpayhostpaybatch )
-                ->where( 'dbid', '>', 1 )
-                ->where( 'dbid', '<', $expiryTime )
-                ->delete();
+            Capsule::table($tblpayhostpaybatch)
+                   ->where('dbid', '>', 1)
+                   ->where('dbid', '<', $expiryTime)
+                   ->delete();
 
             // Do redirect
             // First check that the checksum is valid
@@ -316,8 +388,8 @@ function payhostpaybatch_initiate( $params )
             $checkSource .= $d[1]->value;
             $checkSource .= $d[2]->value;
             $checkSource .= $payHostSecretKey;
-            $check = md5( $checkSource );
-            if ( $check == $d[3]->value ) {
+            $check       = md5($checkSource);
+            if ($check == $d[3]->value) {
                 $inputs = $d;
 
                 $html = <<<HTML
@@ -334,8 +406,8 @@ HTML;
         } else {
             // Process response - doesn't happen
         }
-    } catch ( SoapFault $f ) {
-        var_dump( $f );
+    } catch (SoapFault $f) {
+        var_dump($f);
     }
     echo $html;
 }
@@ -347,7 +419,7 @@ HTML;
  *
  * @return array Transaction response status
  */
-function payhostpaybatch_refund( $params )
+function payhostpaybatch_refund($params)
 {
     // Gateway Configuration Parameters
     $accountId     = $params['accountID'];
@@ -405,7 +477,7 @@ function payhostpaybatch_refund( $params )
  *
  * @return array Transaction response status
  */
-function payhostpaybatch_cancelSubscription( $params )
+function payhostpaybatch_cancelSubscription($params)
 {
     // Gateway Configuration Parameters
     $accountId     = $params['accountID'];

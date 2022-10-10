@@ -21,52 +21,52 @@ $payBatchSoap = new paybatchsoap();
 try {
     $batches = [];
     $query   = "select recordid from `" . _DB_PREFIX_ . "payhostpaybatch` where recordtype = 'uploadid'";
-    $stmt    = $dbc->prepare( $query );
+    $stmt    = $dbc->prepare($query);
     $stmt->execute();
     $result = $stmt->get_result();
-    while ( $batch = $result->fetch_assoc() ) {
+    while ($batch = $result->fetch_assoc()) {
         $batches[] = $batch['recordid'];
     }
     $stmt = null;
 
-    if (  ( $nbatches = count( $batches ) ) > 0 ) {
-        echo 'Query batches: ' . json_encode( $batches ) . '<br>';
-        foreach ( $batches as $key => $batch ) {
-            $queryResult = doPayBatchQuery( $batch );
-            echo 'Query result: ' . json_encode( $queryResult ) . '<br>';
+    if (($nbatches = count($batches)) > 0) {
+        echo 'Query batches: ' . json_encode($batches) . '<br>';
+        foreach ($batches as $key => $batch) {
+            $queryResult = doPayBatchQuery($batch);
+            echo 'Query result: ' . json_encode($queryResult) . '<br>';
 
-            if ( intval( $queryResult->Unprocessed ) == 0 ) {
+            if (intval($queryResult->Unprocessed) == 0) {
                 echo 'Unprocessed: ' . $queryResult->Unprocessed;
-                if ( !empty( $queryResult->TransResult ) ) {
-                    if ( !is_array( $queryResult->TransResult ) ) {
+                if ( ! empty($queryResult->TransResult)) {
+                    if ( ! is_array($queryResult->TransResult)) {
                         // Only single result
-                        handleLineItem( $queryResult->TransResult );
+                        handleLineItem($queryResult->TransResult);
                     } else {
-                        foreach ( $queryResult->TransResult as $transResult ) {
-                            handleLineItem( $transResult );
+                        foreach ($queryResult->TransResult as $transResult) {
+                            handleLineItem($transResult);
                         }
                     }
-                    unset( $batches[$key] );
+                    unset($batches[$key]);
                     $query = "delete from `" . _DB_PREFIX_ . "payhostpaybatch` where recordtype = 'uploadid' and recordid = ?";
-                    $stmt  = $dbc->prepare( $query );
-                    $stmt->bind_param( 's', $batch );
+                    $stmt  = $dbc->prepare($query);
+                    $stmt->bind_param('s', $batch);
                     $stmt->execute();
                     $stmt = null;
                 }
             }
         }
 
-        die( $nbatches . ' PayGate PayBatch batches were queried for payment information and processed' );
+        die($nbatches . ' PayGate PayBatch batches were queried for payment information and processed');
     } else {
-        die( 'No PayGate PayBatch batches were found for processing' );
+        die('No PayGate PayBatch batches were found for processing');
     }
-} catch ( Exception $e ) {
-    die( $e->getMessage() );
+} catch (Exception $e) {
+    die($e->getMessage());
 }
 
-function handleLineItem( $transResult )
+function handleLineItem($transResult)
 {
-    $transResult = explode( ',', $transResult );
+    $transResult = explode(',', $transResult);
     $headings    = [
         'txId',
         'txType',
@@ -77,43 +77,43 @@ function handleLineItem( $transResult )
         'txResultCode',
         'txResultDescription',
     ];
-    $transResult = array_combine( $headings, $transResult );
-    echo json_encode( $transResult );
+    $transResult = array_combine($headings, $transResult);
+    echo json_encode($transResult);
 
-    $dataApi = [
+    $dataApi  = [
         'invoiceid'     => $transResult['txRef'],
         'paymentmethod' => 'payhostpaybatch',
         'status'        => 'Paid',
         'txId'          => $transResult['txId'],
     ];
-    $response = updateInvoicesApi( $dataApi );
+    $response = updateInvoicesApi($dataApi);
     echo $response;
 }
 
-function doPayBatchQuery( $uploadId )
+function doPayBatchQuery($uploadId)
 {
     global $payBatchSoap;
     global $payBatchId;
     global $payBatchSecretKey;
 
-    $queryXml = $payBatchSoap->getQueryRequest( $uploadId );
+    $queryXml = $payBatchSoap->getQueryRequest($uploadId);
     $wsdl     = PAYBATCHAPIWSDL;
     $options  = ['trace' => 1, 'login' => $payBatchId, 'password' => $payBatchSecretKey];
 
-    $soapClient  = new SoapClient( $wsdl, $options );
-    $queryResult = $soapClient->__soapCall( 'Query', [
-        new SoapVar( $queryXml, XSD_ANYXML ),
-    ] );
+    $soapClient  = new SoapClient($wsdl, $options);
+    $queryResult = $soapClient->__soapCall('Query', [
+        new SoapVar($queryXml, XSD_ANYXML),
+    ]);
 
     return $queryResult;
 }
 
-function updateInvoicesApi( $data )
+function updateInvoicesApi($data)
 {
-    addInvoicePayment( $data );
+    addInvoicePayment($data);
 }
 
-function markInvoicesPaid( $data )
+function markInvoicesPaid($data)
 {
     global $api_identifier, $api_secret, $api_url, $api_access_key;
     $postFields = [
@@ -127,21 +127,21 @@ function markInvoicesPaid( $data )
     ];
 
     $ch = curl_init();
-    curl_setopt( $ch, CURLOPT_URL, $api_url );
-    curl_setopt( $ch, CURLOPT_POST, 1 );
-    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
-    curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query( $postFields ) );
-    $response = curl_exec( $ch );
-    $error    = curl_error( $ch );
+    curl_setopt($ch, CURLOPT_URL, $api_url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postFields));
+    $response = curl_exec($ch);
+    $error    = curl_error($ch);
 
-    if ( $error == '' ) {
+    if ($error == '') {
         return $response;
     } else {
         return $error;
     }
 }
 
-function addInvoicePayment( $data )
+function addInvoicePayment($data)
 {
     global $api_identifier, $api_secret, $api_url, $api_access_key;
 
@@ -157,22 +157,22 @@ function addInvoicePayment( $data )
     ];
 
     $ch = curl_init();
-    curl_setopt( $ch, CURLOPT_URL, $api_url );
-    curl_setopt( $ch, CURLOPT_POST, 1 );
-    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
-    curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query( $postFields ) );
-    $response = curl_exec( $ch );
-    curl_close( $ch );
+    curl_setopt($ch, CURLOPT_URL, $api_url);
+    curl_setopt($ch, CURLOPT_POST, 1);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postFields));
+    $response = curl_exec($ch);
+    curl_close($ch);
 
     $isDuplicate  = false;
-    $transactions = json_decode( $response )->transactions->transaction;
-    foreach ( $transactions as $transaction ) {
-        if ( $data['txId'] == $transaction->transid ) {
+    $transactions = json_decode($response)->transactions->transaction;
+    foreach ($transactions as $transaction) {
+        if ($data['txId'] == $transaction->transid) {
             $isDuplicate = true;
         }
     }
 
-    if ( !$isDuplicate ) {
+    if ( ! $isDuplicate) {
         $postFields = [
             'username'     => $api_identifier,
             'password'     => $api_secret,
@@ -185,15 +185,15 @@ function addInvoicePayment( $data )
         ];
 
         $ch = curl_init();
-        curl_setopt( $ch, CURLOPT_URL, $api_url );
-        curl_setopt( $ch, CURLOPT_POST, 1 );
-        curl_setopt( $ch, CURLOPT_RETURNTRANSFER, 1 );
-        curl_setopt( $ch, CURLOPT_POSTFIELDS, http_build_query( $postFields ) );
-        $response = curl_exec( $ch );
-        $error    = curl_error( $ch );
-        curl_close( $ch );
+        curl_setopt($ch, CURLOPT_URL, $api_url);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($postFields));
+        $response = curl_exec($ch);
+        $error    = curl_error($ch);
+        curl_close($ch);
 
-        if ( $error == '' ) {
+        if ($error == '') {
             return $response;
         } else {
             return $error;

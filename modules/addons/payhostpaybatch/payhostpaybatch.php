@@ -13,8 +13,8 @@
 use WHMCS\Module\Addon\payhostpaybatch\Admin\AdminDispatcher;
 use WHMCS\Module\Addon\payhostpaybatch\Client\ClientDispatcher;
 
-if ( !defined( "WHMCS" ) ) {
-    die( "This file cannot be accessed directly" );
+if ( ! defined("WHMCS")) {
+    die("This file cannot be accessed directly");
 }
 
 /**
@@ -139,7 +139,7 @@ function payhostpaybatch_deactivate()
  *
  * @return void
  */
-function payhostpaybatch_upgrade( $vars )
+function payhostpaybatch_upgrade($vars)
 {
 }
 
@@ -155,7 +155,7 @@ function payhostpaybatch_upgrade( $vars )
  * @see payhostpaybatch\Admin\Controller::index()
  *
  */
-function payhostpaybatch_output( $vars )
+function payhostpaybatch_output($vars)
 {
     // Get common module parameters
     $modulelink = $vars['modulelink']; // eg. payhostpaybatchs.php?module=payhostpaybatch
@@ -173,10 +173,10 @@ function payhostpaybatch_output( $vars )
     // Dispatch and handle request here. What follows is a demonstration of one
     // possible way of handling this using a very basic dispatcher implementation.
 
-    $action = isset( $_REQUEST['action'] ) ? $_REQUEST['action'] : '';
+    $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
     $dispatcher = new AdminDispatcher();
-    $response   = $dispatcher->dispatch( $action, $vars );
+    $response   = $dispatcher->dispatch($action, $vars);
     echo $response;
 }
 
@@ -190,7 +190,7 @@ function payhostpaybatch_output( $vars )
  *
  * @return string
  */
-function payhostpaybatch_sidebar( $vars )
+function payhostpaybatch_sidebar($vars)
 {
     // Get common module parameters
     $modulelink = $vars['modulelink'];
@@ -206,6 +206,7 @@ function payhostpaybatch_sidebar( $vars )
     $configTextareaField = $vars['Textarea Field Name'];
 
     $sidebar = '<p>Sidebar output HTML goes here</p>';
+
     return $sidebar;
 }
 
@@ -221,7 +222,7 @@ function payhostpaybatch_sidebar( $vars )
  * @see payhostpaybatch\Client\Controller::index()
  *
  */
-function payhostpaybatch_clientarea( $vars )
+function payhostpaybatch_clientarea($vars)
 {
     // Get common module parameters
     $modulelink = $vars['modulelink']; // eg. index.php?m=payhostpaybatch
@@ -241,8 +242,9 @@ function payhostpaybatch_clientarea( $vars )
      * possible way of handling this using a very basic dispatcher implementation.
      */
 
-    $action = isset( $_REQUEST['action'] ) ? $_REQUEST['action'] : '';
+    $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : '';
 
     $dispatcher = new ClientDispatcher();
-    return $dispatcher->dispatch( $action, $vars );
+
+    return $dispatcher->dispatch($action, $vars);
 }

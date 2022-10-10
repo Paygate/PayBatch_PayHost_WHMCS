@@ -16,3 +16,6 @@ Date	  : Version: Description
                      Consolidated bug fixes.
 2020-10-18: v1.0.6 : Added check for already paid invoice.
                      Update WSDL url to correct syntax.
+
+2022-10-10: v1.0.7 : Add token support for returning customers in PayHost.
+                     Tested with WHMCS 8.5.1.
