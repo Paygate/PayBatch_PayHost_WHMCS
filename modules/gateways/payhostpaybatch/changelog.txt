@@ -19,3 +19,6 @@ Date	  : Version: Description
 
 2022-10-10: v1.0.7 : Add token support for returning customers in PayHost.
                      Tested with WHMCS 8.5.1.
+
+2023-05-15: v1.0.8 : Test WHMCS 8.6.1.
+                     Update for PHP 8.0.

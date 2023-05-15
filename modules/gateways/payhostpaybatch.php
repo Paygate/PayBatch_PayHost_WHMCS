@@ -1,6 +1,6 @@
 <?php
 /*
- * Copyright (c) 2020 PayGate (Pty) Ltd
+ * Copyright (c) 2023 PayGate (Pty) Ltd
  *
  * Author: App Inlet (Pty) Ltd
  *
@@ -359,7 +359,7 @@ function payhostpaybatch_initiate($params)
             ]
         );
 
-        if (array_key_exists('Redirect', $result->WebPaymentResponse)) {
+        if (array_key_exists('Redirect', (array)$result->WebPaymentResponse)) {
             // Redirect to Payment Portal
             // Store key values for return response
 
