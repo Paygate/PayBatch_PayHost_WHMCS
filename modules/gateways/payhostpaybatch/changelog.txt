@@ -22,3 +22,6 @@ Date	  : Version: Description
 
 2023-05-15: v1.0.8 : Test WHMCS 8.6.1.
                      Update for PHP 8.0.
+
+2023-05-16: v1.0.9 : Update branding.
+                     Amend module file structure.
